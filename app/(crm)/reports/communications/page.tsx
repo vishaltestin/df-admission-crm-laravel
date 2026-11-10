@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { FormSelect } from "@/components/ui/form-select"
+import { DatePicker } from "@/components/ui/date-time-picker"
 import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -138,25 +139,23 @@ export default function CommunicationReportPage() {
         <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div>
             <Label className="mb-1 block text-xs">From</Label>
-            <Input
-              type="date"
+            <DatePicker
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="h-9 text-xs"
+              onChange={(v) => setFrom(v)}
+              placeholder="Start date"
             />
           </div>
           <div>
             <Label className="mb-1 block text-xs">To</Label>
-            <Input
-              type="date"
+            <DatePicker
               value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="h-9 text-xs"
+              onChange={(v) => setTo(v)}
+              placeholder="End date"
             />
           </div>
           <div>
             <Label className="mb-1 block text-xs">Channel</Label>
-            <select
+            <FormSelect
               value={channel}
               onChange={(e) => setChannel(e.target.value)}
               className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
@@ -166,11 +165,11 @@ export default function CommunicationReportPage() {
               <option value="whatsapp">WhatsApp</option>
               <option value="email">Email</option>
               <option value="call">IVR / Call</option>
-            </select>
+            </FormSelect>
           </div>
           <div>
             <Label className="mb-1 block text-xs">Status</Label>
-            <select
+            <FormSelect
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
@@ -179,7 +178,7 @@ export default function CommunicationReportPage() {
               <option value="pending">Pending</option>
               <option value="sent">Sent</option>
               <option value="failed">Failed</option>
-            </select>
+            </FormSelect>
           </div>
           <div className="flex gap-2">
             <Button

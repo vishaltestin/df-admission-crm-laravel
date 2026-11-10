@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { FormSelect } from "@/components/ui/form-select"
 
 const CURRENCIES = [
   ["INR", "Indian Rupee"],
@@ -82,7 +83,7 @@ export default function GeneralSettingsPage() {
 
             <div>
               <Label className="mb-1 block text-xs">Currency</Label>
-              <select
+              <FormSelect
                 value={form.currency}
                 onChange={(e) => setForm({ ...form, currency: e.target.value })}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -92,13 +93,13 @@ export default function GeneralSettingsPage() {
                     {code} - {label}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <Label className="mb-1 block text-xs">Timezone</Label>
-                <select
+                <FormSelect
                   value={form.timezone}
                   onChange={(e) =>
                     setForm({ ...form, timezone: e.target.value })
@@ -110,12 +111,12 @@ export default function GeneralSettingsPage() {
                   <option value="Asia/Dubai">Asia/Dubai (GST)</option>
                   <option value="Europe/London">Europe/London (GMT)</option>
                   <option value="America/New_York">America/New_York (EST)</option>
-                </select>
+                </FormSelect>
               </div>
 
               <div>
                 <Label className="mb-1 block text-xs">Date Format</Label>
-                <select
+                <FormSelect
                   value={form.date_format}
                   onChange={(e) =>
                     setForm({ ...form, date_format: e.target.value })
@@ -125,7 +126,7 @@ export default function GeneralSettingsPage() {
                   <option value="d M, Y">27 Oct, 2026 (d M, Y)</option>
                   <option value="Y-m-d">2026-10-27 (Y-m-d)</option>
                   <option value="d/m/Y">27/10/2026 (d/m/Y)</option>
-                </select>
+                </FormSelect>
               </div>
             </div>
 
@@ -133,7 +134,7 @@ export default function GeneralSettingsPage() {
               <Label className="mb-1 block text-xs">
                 Default Payment Gateway
               </Label>
-              <select
+              <FormSelect
                 value={form.default_payment_gateway}
                 onChange={(e) =>
                   setForm({ ...form, default_payment_gateway: e.target.value })
@@ -144,7 +145,7 @@ export default function GeneralSettingsPage() {
                 <option value="payu">PayU Money</option>
                 <option value="cashfree">Cashfree</option>
                 <option value="stripe">Stripe</option>
-              </select>
+              </FormSelect>
             </div>
 
             <Button

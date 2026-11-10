@@ -1,4 +1,8 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "../app";
+@source "../components";
+@source "../hooks";
+@source "../lib";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "remixicon/fonts/remixicon.css";

@@ -8,11 +8,13 @@ import { DataTable, type ColumnDef } from "@/components/ui/data-table"
 export default function RejectedLeadsPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [rows, setRows] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     fetch("/api/crm-resources?resource=raw_data&sub=rejected")
       .then((r) => r.json())
       .then((d) => setRows(d.items || []))
+      .finally(() => setLoading(false))
   }, [])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,9 +81,10 @@ export default function RejectedLeadsPage() {
       <BreadcrumbBar parent="CRM" title="Rejected Leads" />
       <Card className="gap-0 py-0 shadow-xs text-xs">
         <DataTable
-          title={`Rejected Leads (${rows.length})`}
+          title="Rejected Leads"
           columns={columns}
           data={rows}
+          loading={loading}
           searchPlaceholder="Search rejected leads..."
           emptyMessage="No rejected raw leads found."
         />

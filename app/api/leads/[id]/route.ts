@@ -37,6 +37,8 @@ export async function GET(
     appResponse,
     appForm,
     users,
+    registers,
+    organization,
     stages,
     verification,
     coupons,
@@ -84,6 +86,12 @@ export async function GET(
       : Promise.resolve(null),
     prisma.users.findMany({
       select: { id: true, first_name: true, last_name: true, email: true },
+    }),
+    prisma.registers.findMany({
+      select: { user_id: true, mobile: true, first_name: true, last_name: true, email: true },
+    }),
+    prisma.organizations.findUnique({
+      where: { id: Number(lead.organization_id) },
     }),
     lead.pipeline_id
       ? prisma.pipeline_stages.findMany({
@@ -133,9 +141,28 @@ export async function GET(
     messages: queryMessages.filter((m) => m.query_id === q.id),
   }))
 
+  const regMap = new Map(registers.map((r) => [r.user_id, r]))
+  const assignedReg = lead.lead_assign_to
+    ? regMap.get(Number(lead.lead_assign_to))
+    : undefined
+  const assignedUserRow = lead.lead_assign_to
+    ? users.find((u) => u.id === Number(lead.lead_assign_to))
+    : undefined
+  const assignedUser = assignedUserRow
+    ? {
+        id: assignedUserRow.id,
+        first_name: assignedUserRow.first_name || assignedReg?.first_name || "",
+        last_name: assignedUserRow.last_name || assignedReg?.last_name || "",
+        email: assignedUserRow.email || assignedReg?.email || "-",
+        mobile: assignedReg?.mobile || "-",
+      }
+    : null
+
   return NextResponse.json(
     serializeData({
       lead,
+      organization,
+      assignedUser,
       stages,
       notes: notes.map((n) => ({
         ...n,
@@ -305,7 +332,18 @@ export async function POST(
     const channel = String(body.channel || "email")
     const toAddr =
       channel === "email" ? lead.email || lead.mobile : lead.mobile
-    const content = String(body.message || "").trim()
+    const appLink = body.application_link
+      ? String(body.application_link)
+      : `/application_form_show/default/${lead.id}`
+    const rawContent = String(body.message || "").trim()
+    const content = rawContent
+      .replace(/\{lead_name\}|\{customer_name\}/gi, lead.name || "Student")
+      .replace(/\{lead_mobile\}/gi, lead.mobile || "")
+      .replace(/\{lead_email\}/gi, lead.email || "")
+      .replace(/\{application_link\}/gi, appLink)
+      .replace(/\{user_name\}/gi, ctx.fullName || "Admissions Team")
+      .replace(/\{company_name\}/gi, ctx.currentOrgName || "University")
+      .replace(/\{date\}/gi, now.toLocaleDateString("en-IN"))
 
     const comm = await prisma.communication_logs.create({
       data: {
@@ -339,7 +377,7 @@ export async function POST(
         lead_id: leadId,
         user_id: BigInt(ctx.userId),
         action: `${channel}_sent`,
-        description: `Sent ${channel.toUpperCase()} to ${toAddr}`,
+        description: `Sent ${channel.toUpperCase()} to ${toAddr}${body.from_email ? ` (from ${body.from_email})` : ""}`,
         created_at: now,
         updated_at: now,
       },
@@ -350,17 +388,42 @@ export async function POST(
 
   if (action === "reassign") {
     const newOwner = Number(body.reassign_to || 0)
+    const reassignType =
+      body.reassign_type === "remove_and_add" ? "remove_and_add" : "add_owner"
+    const prevOwner = lead.lead_assign_to ? BigInt(lead.lead_assign_to) : null
+
     await prisma.leads.update({
       where: { id: leadId },
       data: { lead_assign_to: BigInt(newOwner), updated_at: now },
     })
+
+    if (newOwner > 0) {
+      await prisma.lead_assignment_logs.create({
+        data: {
+          lead_id: leadId,
+          organization_id: BigInt(ctx.orgId),
+          lead_source_id: lead.lead_source_id ?? null,
+          assigned_to: BigInt(newOwner),
+          previous_assigned_to: prevOwner && prevOwner > BigInt(0) ? prevOwner : null,
+          rule_type: reassignType,
+          is_reassign: true,
+          notes:
+            reassignType === "remove_and_add"
+              ? "Previous owner removed & new owner assigned"
+              : "Owner added via Re-assign Lead",
+          created_at: now,
+          updated_at: now,
+        },
+      })
+    }
+
     await prisma.lead_activity_logs.create({
       data: {
         organization_id: BigInt(ctx.orgId),
         lead_id: leadId,
         user_id: BigInt(ctx.userId),
         action: "lead_reassigned",
-        description: `Lead reassigned to counsellor #${newOwner}`,
+        description: `Lead reassigned to counsellor #${newOwner} (${reassignType === "remove_and_add" ? "Remove & Add" : "Add Owner"})`,
         created_at: now,
         updated_at: now,
       },
@@ -380,6 +443,45 @@ export async function POST(
         },
       })
     }
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === "assign_application_form" && body.application_form_id) {
+    const formId = Number(body.application_form_id)
+    await prisma.leads.update({
+      where: { id: leadId },
+      data: { application_form_id: formId, updated_at: now },
+    })
+    const existingApp = await prisma.lead_applications.findFirst({
+      where: { lead_id: leadId },
+    })
+    if (existingApp) {
+      await prisma.lead_applications.update({
+        where: { id: existingApp.id },
+        data: { application_form: formId },
+      })
+    } else {
+      await prisma.lead_applications.create({
+        data: {
+          lead_id: leadId,
+          application_form: formId,
+          application_score: 0,
+          payment_status: "pending",
+          created_at: now,
+        },
+      })
+    }
+    await prisma.lead_activity_logs.create({
+      data: {
+        organization_id: BigInt(ctx.orgId),
+        lead_id: leadId,
+        user_id: BigInt(ctx.userId),
+        action: "application_form_assigned",
+        description: `Assigned Application Form #${formId} to lead`,
+        created_at: now,
+        updated_at: now,
+      },
+    })
     return NextResponse.json({ ok: true })
   }
 
@@ -447,10 +549,52 @@ export async function POST(
           body.alternate_mobile !== undefined
             ? String(body.alternate_mobile || "") || null
             : lead.alternate_mobile,
-        email: body.email !== undefined ? String(body.email || "") || null : lead.email,
-        institute_id: body.institute_id ? BigInt(body.institute_id) : lead.institute_id,
-        programme_id: body.programme_id ? BigInt(body.programme_id) : lead.programme_id,
-        faculty_id: body.faculty_id ? BigInt(body.faculty_id) : lead.faculty_id,
+        email:
+          body.email !== undefined
+            ? String(body.email || "") || null
+            : lead.email,
+        country:
+          body.country !== undefined
+            ? String(body.country || "") || null
+            : lead.country,
+        state:
+          body.state !== undefined
+            ? String(body.state || "") || null
+            : lead.state,
+        city:
+          body.city !== undefined
+            ? String(body.city || "") || null
+            : lead.city,
+        institute_id:
+          body.institute_id !== undefined
+            ? safeBigInt(body.institute_id)
+            : lead.institute_id,
+        programme_id:
+          body.programme_id !== undefined
+            ? safeBigInt(body.programme_id)
+            : lead.programme_id,
+        faculty_id:
+          body.faculty_id !== undefined
+            ? safeBigInt(body.faculty_id)
+            : lead.faculty_id,
+        lead_source_id:
+          body.lead_source_id !== undefined
+            ? safeBigInt(body.lead_source_id)
+            : lead.lead_source_id,
+        type_id:
+          body.type_id !== undefined
+            ? safeBigInt(body.type_id)
+            : lead.type_id,
+        lead_campaign_id:
+          body.lead_campaign_id !== undefined
+            ? safeBigInt(body.lead_campaign_id)
+            : lead.lead_campaign_id,
+        application_form_id:
+          body.application_form_id !== undefined
+            ? body.application_form_id
+              ? Number(body.application_form_id)
+              : null
+            : lead.application_form_id,
         updated_at: now,
       },
     })

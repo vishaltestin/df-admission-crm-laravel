@@ -4,6 +4,8 @@ import * as React from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { FormSelect } from "@/components/ui/form-select"
+import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -179,7 +181,7 @@ export default function FollowUpCalendarPage() {
           >
             <div>
               <Label className="mb-1 block text-xs">Student Lead *</Label>
-              <select
+              <FormSelect
                 required
                 value={form.lead_id}
                 onChange={(e) => setForm({ ...form, lead_id: e.target.value })}
@@ -190,12 +192,12 @@ export default function FollowUpCalendarPage() {
                     {l.name} ({l.mobile})
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div>
                 <Label className="mb-1 block text-xs">Event Type</Label>
-                <select
+                <FormSelect
                   value={form.event_type}
                   onChange={(e) =>
                     setForm({ ...form, event_type: e.target.value })
@@ -205,18 +207,14 @@ export default function FollowUpCalendarPage() {
                   <option value="call">Phone Call</option>
                   <option value="meeting">Campus Visit</option>
                   <option value="counselling">Video Counselling</option>
-                </select>
+                </FormSelect>
               </div>
               <div>
                 <Label className="mb-1 block text-xs">Date & Time *</Label>
-                <Input
-                  type="datetime-local"
-                  required
+                <DateTimePicker
                   value={form.start_at}
-                  onChange={(e) =>
-                    setForm({ ...form, start_at: e.target.value })
-                  }
-                  className="h-9 text-xs"
+                  onChange={(v) => setForm({ ...form, start_at: v })}
+                  placeholder="Pick event date & time"
                 />
               </div>
             </div>

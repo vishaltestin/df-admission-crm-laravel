@@ -5,12 +5,15 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { LeadCreateApiModal } from "@/components/crm/lead-create-api-modal"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Skeleton } from "@/components/ui/skeleton"
 import { DataTable, type ColumnDef } from "@/components/ui/data-table"
 import {
   Dialog,
@@ -20,15 +23,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FormSelect } from "@/components/ui/form-select"
 
 function RawLeadsQueueInner() {
   const searchParams = useSearchParams()
   const uploadId = searchParams.get("upload_id")
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [rows, setRows] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
   const [selectedIds, setSelectedIds] = React.useState<string[]>([])
   const [showModal, setShowModal] = React.useState(false)
+  const [showApiModal, setShowApiModal] = React.useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editing, setEditing] = React.useState<any>(null)
   const [form, setForm] = React.useState({
@@ -46,14 +53,14 @@ function RawLeadsQueueInner() {
     fetch(`/api/crm-resources?resource=raw_data&sub=raw_leads${qs}`)
       .then((r) => r.json())
       .then((d) => setRows(d.rawLeads || d.items || []))
+      .finally(() => setLoading(false))
   }, [uploadId])
 
   React.useEffect(() => {
     load()
   }, [load])
 
-  const allChecked =
-    rows.length > 0 && selectedIds.length === rows.length
+  const allChecked = rows.length > 0 && selectedIds.length === rows.length
 
   function toggleAll(checked: boolean) {
     setSelectedIds(checked ? rows.map((r) => String(r.id)) : [])
@@ -229,11 +236,11 @@ function RawLeadsQueueInner() {
               asChild
               className="bg-emerald-100 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-200"
             >
-              <Link href="/leads">Created</Link>
+              <Link href="/leads">Yes</Link>
             </Badge>
           ) : (
             <Badge variant="secondary" className="text-[10px]">
-              Not Created
+              No
             </Badge>
           ),
       },
@@ -283,7 +290,7 @@ function RawLeadsQueueInner() {
                       load()
                     }
                   }}
-                  className="bg-[#405189] text-[11px] font-semibold text-white hover:bg-[#364574]"
+                  className="bg-[#0ab39c] text-[11px] font-semibold text-white hover:bg-[#099885]"
                 >
                   Convert
                 </Button>
@@ -311,22 +318,28 @@ function RawLeadsQueueInner() {
               <Button
                 size="xs"
                 variant="destructive"
-                onClick={async () => {
-                  await fetch("/api/crm-resources", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      resource: "raw_data",
-                      action: "delete_raw",
-                      id: r.id,
-                    }),
+                onClick={() =>
+                  confirmDelete({
+                    title: "Delete Raw Lead?",
+                    description: `Are you sure you want to permanently delete raw lead "${r.name || r.mobile}" (ID #${r.id})?`,
+                    onConfirm: async () => {
+                      await fetch("/api/crm-resources", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          resource: "raw_data",
+                          action: "delete_raw",
+                          id: r.id,
+                        }),
+                      })
+                      toast.success("Raw lead deleted")
+                      load()
+                    },
                   })
-                  toast.success("Raw lead deleted")
-                  load()
-                }}
+                }
                 className="text-[11px]"
               >
-                Del
+                <i className="ri-delete-bin-line" />
               </Button>
             </div>
           )
@@ -334,12 +347,12 @@ function RawLeadsQueueInner() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allChecked, selectedIds, load]
+    [allChecked, selectedIds, load, confirmDelete]
   )
 
   return (
     <div>
-      <BreadcrumbBar parent="Raw Data" title="Raw Leads Panel" />
+      <BreadcrumbBar parent="CRM" title="Raw Lead List" />
 
       {uploadId && (
         <div className="mb-3 flex items-center justify-between rounded-md border border-[#299cdb]/30 bg-[#299cdb]/10 px-3 py-2 text-xs">
@@ -355,18 +368,52 @@ function RawLeadsQueueInner() {
 
       <Card className="gap-0 py-0 text-xs shadow-xs">
         <DataTable
-          title={`Raw Leads Panel (${rows.length})`}
+          title={`Raw Lead List (${rows.length})`}
           columns={columns}
           data={rows}
+          loading={loading}
           searchPlaceholder="Search name, mobile, course, city..."
+          emptyMessage="No raw leads found for this upload."
           toolbarRight={
             <div className="flex flex-wrap items-center gap-2">
+              {selectedIds.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() =>
+                    confirmDelete({
+                      title: `Delete ${selectedIds.length} Selected Raw Lead(s)?`,
+                      description: `Are you sure you want to delete ${selectedIds.length} selected raw lead(s)? This action cannot be undone.`,
+                      onConfirm: async () => {
+                        await fetch("/api/crm-resources", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            resource: "raw_data",
+                            action: "bulk_delete_raw",
+                            ids: selectedIds,
+                          }),
+                        })
+                        toast.success(
+                          `Deleted ${selectedIds.length} raw lead(s)`
+                        )
+                        setSelectedIds([])
+                        load()
+                      },
+                    })
+                  }
+                  className="h-8 text-xs"
+                >
+                  <i className="ri-delete-bin-2-line mr-1" /> Delete (
+                  {selectedIds.length})
+                </Button>
+              )}
               <Button
                 size="sm"
                 onClick={handleBulkIvr}
-                className="h-8 bg-[#0ab39c] text-xs font-semibold text-white hover:bg-[#099885]"
+                className="h-8 bg-[#405189] text-xs font-semibold text-white hover:bg-[#364574]"
               >
-                Send IVR for Selected
+                <i className="ri-phone-line mr-1" /> Send IVR for Selected
                 {selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}
               </Button>
               <Button
@@ -402,6 +449,14 @@ function RawLeadsQueueInner() {
               </Button>
               <Button
                 size="sm"
+                variant="secondary"
+                onClick={() => setShowApiModal(true)}
+                className="h-8 bg-slate-900 text-xs font-semibold text-white hover:bg-slate-800"
+              >
+                <i className="ri-code-line mr-1" /> Lead API Tester
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => {
                   setEditing(null)
                   setForm({
@@ -415,7 +470,7 @@ function RawLeadsQueueInner() {
                   })
                   setShowModal(true)
                 }}
-                className="h-8 bg-[#405189] text-xs font-semibold text-white hover:bg-[#364574]"
+                className="h-8 bg-[#0ab39c] text-xs font-semibold text-white hover:bg-[#099885]"
               >
                 + Add Raw Lead
               </Button>
@@ -514,7 +569,7 @@ function RawLeadsQueueInner() {
             {editing && (
               <div>
                 <Label className="mb-1 block text-xs">Status</Label>
-                <select
+                <FormSelect
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -525,7 +580,7 @@ function RawLeadsQueueInner() {
                   <option value="confirmed">Confirmed</option>
                   <option value="rejected">Rejected</option>
                   <option value="ivr_failed">IVR Failed</option>
-                </select>
+                </FormSelect>
               </div>
             )}
             <DialogFooter>
@@ -546,13 +601,30 @@ function RawLeadsQueueInner() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <LeadCreateApiModal
+        open={showApiModal}
+        onOpenChange={setShowApiModal}
+        onLeadCreated={load}
+      />
+
+      {DeleteDialog}
     </div>
   )
 }
 
 export default function RawLeadsQueuePage() {
   return (
-    <React.Suspense fallback={<div className="p-4 text-xs">Loading...</div>}>
+    <React.Suspense
+      fallback={
+        <Card className="space-y-3 p-4 shadow-xs">
+          <Skeleton className="h-6 w-48" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </Card>
+      }
+    >
       <RawLeadsQueueInner />
     </React.Suspense>
   )

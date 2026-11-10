@@ -3,6 +3,7 @@
 import * as React from "react"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FormSelect } from "@/components/ui/form-select"
 
 const ENTITY_TYPES = [
   { value: "leads", label: "Lead" },
@@ -68,6 +70,7 @@ const LOOKUP_ENTITIES = [
 ]
 
 export default function AttributesPage() {
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [items, setItems] = React.useState<any[]>([])
   const [selectedIds, setSelectedIds] = React.useState<string[]>([])
@@ -236,19 +239,25 @@ export default function AttributesPage() {
                 <Button
                   size="xs"
                   variant="destructive"
-                  onClick={async () => {
-                    await fetch("/api/crm-resources", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        resource: "attributes",
-                        action: "delete",
-                        id: a.id,
-                      }),
+                  onClick={() =>
+                    confirmDelete({
+                      title: "Delete Custom Attribute?",
+                      description: `Are you sure you want to delete attribute "${a.name || a.code}"?`,
+                      onConfirm: async () => {
+                        await fetch("/api/crm-resources", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            resource: "attributes",
+                            action: "delete",
+                            id: a.id,
+                          }),
+                        })
+                        toast.success("Attribute deleted")
+                        load()
+                      },
                     })
-                    toast.success("Attribute deleted")
-                    load()
-                  }}
+                  }
                   className="text-[11px]"
                 >
                   Delete
@@ -259,7 +268,7 @@ export default function AttributesPage() {
         },
       },
     ],
-    [allChecked, items, selectedIds, load]
+    [allChecked, items, selectedIds, load, confirmDelete]
   )
 
   return (
@@ -277,20 +286,26 @@ export default function AttributesPage() {
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={async () => {
-                    await fetch("/api/crm-resources", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        resource: "attributes",
-                        action: "bulk_delete",
-                        ids: selectedIds,
-                      }),
+                  onClick={() =>
+                    confirmDelete({
+                      title: `Delete ${selectedIds.length} Attribute(s)?`,
+                      description: `Are you sure you want to permanently delete ${selectedIds.length} selected attribute(s)?`,
+                      onConfirm: async () => {
+                        await fetch("/api/crm-resources", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            resource: "attributes",
+                            action: "bulk_delete",
+                            ids: selectedIds,
+                          }),
+                        })
+                        toast.success("Selected attributes deleted")
+                        setSelectedIds([])
+                        load()
+                      },
                     })
-                    toast.success("Selected attributes deleted")
-                    setSelectedIds([])
-                    load()
-                  }}
+                  }
                   className="h-8 text-xs"
                 >
                   Delete Selected ({selectedIds.length})
@@ -390,7 +405,7 @@ export default function AttributesPage() {
 
               <div>
                 <Label className="mb-1 block text-xs">Entity Type *</Label>
-                <select
+                <FormSelect
                   value={form.entity_type}
                   onChange={(e) =>
                     setForm({ ...form, entity_type: e.target.value })
@@ -402,12 +417,12 @@ export default function AttributesPage() {
                       {et.label}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
 
               <div>
                 <Label className="mb-1 block text-xs">Field Input Type *</Label>
-                <select
+                <FormSelect
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                   className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
@@ -417,14 +432,14 @@ export default function AttributesPage() {
                       {ft}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
             </div>
 
             {form.type === "lookup" && (
               <div>
                 <Label className="mb-1 block text-xs">Lookup Target Entity *</Label>
-                <select
+                <FormSelect
                   value={form.lookup_type}
                   onChange={(e) =>
                     setForm({ ...form, lookup_type: e.target.value })
@@ -437,14 +452,14 @@ export default function AttributesPage() {
                       {le}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
             )}
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label className="mb-1 block text-xs">Validation Rule</Label>
-                <select
+                <FormSelect
                   value={form.validation}
                   onChange={(e) =>
                     setForm({ ...form, validation: e.target.value })
@@ -456,7 +471,7 @@ export default function AttributesPage() {
                       {vo.label}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
               <div>
                 <Label className="mb-1 block text-xs">Sort Order</Label>
@@ -510,6 +525,7 @@ export default function AttributesPage() {
           </form>
         </DialogContent>
       </Dialog>
+      {DeleteDialog}
     </div>
   )
 }

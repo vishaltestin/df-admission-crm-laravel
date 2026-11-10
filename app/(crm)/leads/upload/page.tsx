@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { FormSelect } from "@/components/ui/form-select"
 
 function LeadUploadInner() {
   const router = useRouter()
@@ -112,18 +113,18 @@ function LeadUploadInner() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <div>
               <Label className="mb-1 block text-xs">Deduplicate By</Label>
-              <select
+              <FormSelect
                 value={primaryKey}
                 onChange={(e) => setPrimaryKey(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
               >
                 <option value="mobile">Mobile (Unique)</option>
                 <option value="email">Email (Unique)</option>
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Default Institute</Label>
-              <select
+              <FormSelect
                 value={instituteId}
                 onChange={(e) => setInstituteId(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -135,11 +136,11 @@ function LeadUploadInner() {
                     {i.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Default Source</Label>
-              <select
+              <FormSelect
                 value={sourceId}
                 onChange={(e) => setSourceId(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -151,11 +152,11 @@ function LeadUploadInner() {
                     {s.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Assign Owner</Label>
-              <select
+              <FormSelect
                 value={assignTo}
                 onChange={(e) => setAssignTo(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -167,7 +168,7 @@ function LeadUploadInner() {
                     {u.first_name} {u.last_name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
           </div>
 

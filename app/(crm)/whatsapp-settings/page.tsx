@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default function WhatsappSettingsPage() {
   const [form, setForm] = React.useState({
@@ -130,7 +131,7 @@ export default function WhatsappSettingsPage() {
                 <Label className="mb-1 block text-xs">
                   Provider (Optional)
                 </Label>
-                <select
+                <FormSelect
                   value={form.provider}
                   onChange={(e) =>
                     setForm({ ...form, provider: e.target.value })
@@ -143,7 +144,7 @@ export default function WhatsappSettingsPage() {
                   <option value="interakt">Interakt</option>
                   <option value="aisensy">AiSensy</option>
                   <option value="custom">Custom HTTP Gateway</option>
-                </select>
+                </FormSelect>
               </div>
 
               <div>

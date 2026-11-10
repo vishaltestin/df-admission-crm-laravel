@@ -13,18 +13,26 @@ export default async function LeadDetailPage({
   const ctx = await requireSessionContext()
 
   const [
+    countries,
     states,
     cities,
     institutes,
     programs,
     courses,
     sources,
+    leadTypes,
+    campaigns,
+    events,
     statuses,
     subStatuses,
     pipelines,
     applicationForms,
+    emailTemplates,
+    smsTemplates,
+    whatsappTemplates,
     users,
   ] = await Promise.all([
+    prisma.countries.findMany({ orderBy: { name: "asc" } }),
     prisma.states.findMany({ orderBy: { name: "asc" } }),
     prisma.cities.findMany({ orderBy: { name: "asc" } }),
     prisma.institutes.findMany({
@@ -38,6 +46,18 @@ export default async function LeadDetailPage({
     }),
     prisma.lead_sources.findMany({
       where: { organization_id: BigInt(ctx.orgId) },
+      orderBy: { name: "asc" },
+    }),
+    prisma.lead_types.findMany({
+      where: { organization_id: BigInt(ctx.orgId) },
+      orderBy: { name: "asc" },
+    }),
+    prisma.campaigns.findMany({
+      where: { organization_id: ctx.orgId },
+      orderBy: { name: "asc" },
+    }),
+    prisma.marketing_events.findMany({
+      where: { organization_id: ctx.orgId },
       orderBy: { name: "asc" },
     }),
     prisma.lead_statuses.findMany({
@@ -60,29 +80,54 @@ export default async function LeadDetailPage({
       where: { organization_id: ctx.orgId },
       orderBy: { id: "desc" },
     }),
+    prisma.email_templates.findMany({
+      where: { organization_id: BigInt(ctx.orgId) },
+      orderBy: { id: "desc" },
+    }),
+    prisma.message_templates.findMany({
+      where: { organization_id: BigInt(ctx.orgId) },
+      orderBy: { id: "desc" },
+    }),
+    prisma.whatsapp_templates.findMany({
+      where: { organization_id: BigInt(ctx.orgId) },
+      orderBy: { id: "desc" },
+    }),
     prisma.users.findMany({
       select: { id: true, first_name: true, last_name: true, email: true },
+      orderBy: { first_name: "asc" },
     }),
   ])
 
   const master = serializeData({
+    countries,
     states,
     cities,
     institutes,
     programs,
     courses,
     sources,
+    leadTypes,
+    campaigns,
+    events,
     statuses,
     subStatuses,
     pipelines,
     applicationForms,
+    emailTemplates,
+    smsTemplates,
+    whatsappTemplates,
     users,
   })
 
   return (
     <div>
       <BreadcrumbBar parent="Leads" title={`Lead #${id}`} />
-      <LeadDetailClient leadId={id} master={master} />
+      <LeadDetailClient
+        leadId={id}
+        master={master}
+        userEmail={ctx.email}
+        userName={ctx.fullName}
+      />
     </div>
   )
 }

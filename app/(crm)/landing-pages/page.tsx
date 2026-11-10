@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,8 +20,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default function LandingPagesAdminPage() {
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [pages, setPages] = React.useState<any[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,19 +148,25 @@ export default function LandingPagesAdminPage() {
               <Button
                 size="xs"
                 variant="destructive"
-                onClick={async () => {
-                  await fetch("/api/crm-resources", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      resource: "landing_pages",
-                      action: "delete",
-                      id: p.id,
-                    }),
+                onClick={() =>
+                  confirmDelete({
+                    title: "Delete Landing Page?",
+                    description: `Are you sure you want to delete landing page "${p.title}" (/lp/${p.slug})? All sections will also be removed.`,
+                    onConfirm: async () => {
+                      await fetch("/api/crm-resources", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          resource: "landing_pages",
+                          action: "delete",
+                          id: p.id,
+                        }),
+                      })
+                      toast.success("Landing page deleted")
+                      load()
+                    },
                   })
-                  toast.success("Landing page deleted")
-                  load()
-                }}
+                }
                 className="text-[11px]"
               >
                 Delete
@@ -167,7 +176,7 @@ export default function LandingPagesAdminPage() {
         },
       },
     ],
-    [load]
+    [load, confirmDelete]
   )
 
   return (
@@ -258,7 +267,7 @@ export default function LandingPagesAdminPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1 block text-xs">Layout</Label>
-                <select
+                <FormSelect
                   value={form.layout_name}
                   onChange={(e) =>
                     setForm({ ...form, layout_name: e.target.value })
@@ -267,23 +276,23 @@ export default function LandingPagesAdminPage() {
                 >
                   <option value="velzon">Velzon (14 Sections)</option>
                   <option value="admissions">Admissions Classic</option>
-                </select>
+                </FormSelect>
               </div>
               <div>
                 <Label className="mb-1 block text-xs">Status</Label>
-                <select
+                <FormSelect
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >
                   <option value="1">Active</option>
                   <option value="0">Inactive</option>
-                </select>
+                </FormSelect>
               </div>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Linked Campaign (Optional)</Label>
-              <select
+              <FormSelect
                 value={form.campaign_id}
                 onChange={(e) =>
                   setForm({ ...form, campaign_id: e.target.value })
@@ -296,7 +305,7 @@ export default function LandingPagesAdminPage() {
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             {!editing && (
               <label className="flex items-center gap-2">
@@ -327,6 +336,7 @@ export default function LandingPagesAdminPage() {
           </form>
         </DialogContent>
       </Dialog>
+      {DeleteDialog}
     </div>
   )
 }

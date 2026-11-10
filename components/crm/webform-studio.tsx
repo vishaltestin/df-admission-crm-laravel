@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -12,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
+import { FormSelect } from "@/components/ui/form-select"
 
 const ALLOWED_TYPES = [
   "text",
@@ -83,6 +85,7 @@ const DEFAULT_ATTRS: WebFormAttr[] = [
 
 export function WebFormStudio({ editId }: { editId?: string }) {
   const router = useRouter()
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [meta, setMeta] = React.useState<any>({
     leadSources: [],
@@ -288,7 +291,7 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                 <Label className="mb-1 block text-xs">
                   Submit Success Action *
                 </Label>
-                <select
+                <FormSelect
                   value={form.submit_success_action}
                   onChange={(e) =>
                     setForm({ ...form, submit_success_action: e.target.value })
@@ -297,7 +300,7 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                 >
                   <option value="message">Display custom message</option>
                   <option value="redirect">Redirect To Url</option>
-                </select>
+                </FormSelect>
               </div>
               <div>
                 <Label className="mb-1 block text-xs">
@@ -365,7 +368,7 @@ export function WebFormStudio({ editId }: { editId?: string }) {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <Label className="mb-1 block text-xs">Lead Source</Label>
-                  <select
+                  <FormSelect
                     value={form.lead_source_id}
                     onChange={(e) =>
                       setForm({ ...form, lead_source_id: e.target.value })
@@ -379,11 +382,11 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                         {s.name}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Campaign</Label>
-                  <select
+                  <FormSelect
                     value={form.lead_campaign_id}
                     onChange={(e) =>
                       setForm({ ...form, lead_campaign_id: e.target.value })
@@ -397,11 +400,11 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                         {c.name}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Pipeline</Label>
-                  <select
+                  <FormSelect
                     value={form.pipeline_id}
                     onChange={(e) =>
                       setForm({ ...form, pipeline_id: e.target.value })
@@ -415,11 +418,11 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                         {p.name}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Lead Type</Label>
-                  <select
+                  <FormSelect
                     value={form.type_id}
                     onChange={(e) =>
                       setForm({ ...form, type_id: e.target.value })
@@ -433,13 +436,13 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                         {t.name}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 </div>
                 <div className="sm:col-span-2">
                   <Label className="mb-1 block text-xs">
                     Application Form
                   </Label>
-                  <select
+                  <FormSelect
                     value={form.application_form_id}
                     onChange={(e) =>
                       setForm({ ...form, application_form_id: e.target.value })
@@ -453,7 +456,7 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                         {af.title} ({af.unique_code})
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 </div>
               </div>
             </div>
@@ -540,7 +543,14 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                               type="button"
                               size="xs"
                               variant="destructive"
-                              onClick={() => removeAttr(idx)}
+                              onClick={() =>
+                                confirmDelete({
+                                  title: "Remove Form Field?",
+                                  description: `Are you sure you want to remove field "${attr.name || attr.placeholder || `#${idx + 1}`}" from this web form?`,
+                                  confirmLabel: "Yes, Remove Field",
+                                  onConfirm: () => removeAttr(idx),
+                                })
+                              }
                             >
                               Delete
                             </Button>
@@ -577,7 +587,7 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                         </div>
                         <div>
                           <Label className="mb-1 block text-[11px]">Type</Label>
-                          <select
+                          <FormSelect
                             value={attr.type}
                             onChange={(e) =>
                               updateAttr(idx, { type: e.target.value })
@@ -589,7 +599,7 @@ export function WebFormStudio({ editId }: { editId?: string }) {
                                 {t}
                               </option>
                             ))}
-                          </select>
+                          </FormSelect>
                         </div>
                       </div>
 
@@ -758,6 +768,7 @@ export function WebFormStudio({ editId }: { editId?: string }) {
           </div>
         </Card>
       </div>
+      {DeleteDialog}
     </div>
   )
 }

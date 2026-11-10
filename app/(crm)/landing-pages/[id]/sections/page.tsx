@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -19,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FormSelect } from "@/components/ui/form-select"
 
 const VELZON_PRESETS: Record<string, object> = {
   hero: {
@@ -206,6 +208,7 @@ const VELZON_PRESETS: Record<string, object> = {
 
 export default function LandingPageSectionsBuilder() {
   const params = useParams<{ id: string }>()
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [page, setPage] = React.useState<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -338,19 +341,25 @@ export default function LandingPageSectionsBuilder() {
               <Button
                 size="xs"
                 variant="destructive"
-                onClick={async () => {
-                  await fetch("/api/crm-resources", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      resource: "landing_page_sections",
-                      action: "delete",
-                      id: s.id,
-                    }),
+                onClick={() =>
+                  confirmDelete({
+                    title: "Delete Landing Page Section?",
+                    description: `Are you sure you want to delete the "${s.section_key || "section"}" block from this landing page?`,
+                    onConfirm: async () => {
+                      await fetch("/api/crm-resources", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          resource: "landing_page_sections",
+                          action: "delete",
+                          id: s.id,
+                        }),
+                      })
+                      toast.success("Section removed")
+                      load()
+                    },
                   })
-                  toast.success("Section removed")
-                  load()
-                }}
+                }
                 className="text-[11px]"
               >
                 Delete
@@ -361,7 +370,7 @@ export default function LandingPageSectionsBuilder() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sections, load]
+    [sections, load, confirmDelete]
   )
 
   return (
@@ -380,7 +389,7 @@ export default function LandingPageSectionsBuilder() {
             <Label className="mb-1 block text-xs">
               Section Key (14 Velzon Blocks)
             </Label>
-            <select
+            <FormSelect
               value={sectionKey}
               onChange={(e) => {
                 const k = e.target.value
@@ -396,7 +405,7 @@ export default function LandingPageSectionsBuilder() {
                   {k}
                 </option>
               ))}
-            </select>
+            </FormSelect>
           </div>
           <div>
             <Label className="mb-1 block text-xs">Sort Order</Label>
@@ -542,6 +551,7 @@ export default function LandingPageSectionsBuilder() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {DeleteDialog}
     </div>
   )
 }

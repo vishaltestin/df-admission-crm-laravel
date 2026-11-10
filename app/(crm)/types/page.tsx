@@ -3,6 +3,7 @@
 import * as React from "react"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,8 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default function LeadMediumTypesPage() {
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [items, setItems] = React.useState<any[]>([])
   const [selected, setSelected] = React.useState<string[]>([])
@@ -114,19 +117,25 @@ export default function LeadMediumTypesPage() {
               <Button
                 size="xs"
                 variant="destructive"
-                onClick={async () => {
-                  await fetch("/api/crm-resources", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      resource: "types",
-                      action: "delete",
-                      id: t.id,
-                    }),
+                onClick={() =>
+                  confirmDelete({
+                    title: "Delete Lead Medium?",
+                    description: `Are you sure you want to delete medium "${t.name}"?`,
+                    onConfirm: async () => {
+                      await fetch("/api/crm-resources", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          resource: "types",
+                          action: "delete",
+                          id: t.id,
+                        }),
+                      })
+                      toast.success("Medium deleted")
+                      load()
+                    },
                   })
-                  toast.success("Medium deleted")
-                  load()
-                }}
+                }
                 className="text-[11px]"
               >
                 Delete
@@ -136,7 +145,7 @@ export default function LeadMediumTypesPage() {
         },
       },
     ],
-    [items, selected, load]
+    [items, selected, load, confirmDelete]
   )
 
   return (
@@ -153,22 +162,28 @@ export default function LeadMediumTypesPage() {
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={async () => {
-                    for (const id of selected) {
-                      await fetch("/api/crm-resources", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          resource: "types",
-                          action: "delete",
-                          id,
-                        }),
-                      })
-                    }
-                    setSelected([])
-                    toast.success("Selected mediums deleted")
-                    load()
-                  }}
+                  onClick={() =>
+                    confirmDelete({
+                      title: `Delete ${selected.length} Medium(s)?`,
+                      description: `Are you sure you want to permanently delete ${selected.length} selected lead medium(s)?`,
+                      onConfirm: async () => {
+                        for (const id of selected) {
+                          await fetch("/api/crm-resources", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              resource: "types",
+                              action: "delete",
+                              id,
+                            }),
+                          })
+                        }
+                        setSelected([])
+                        toast.success("Selected mediums deleted")
+                        load()
+                      },
+                    })
+                  }
                   className="h-8 text-xs"
                 >
                   <i className="ri-delete-bin-2-line mr-1" /> Delete (
@@ -233,14 +248,14 @@ export default function LeadMediumTypesPage() {
             </div>
             <div>
               <Label className="mb-1 block text-xs">Status</Label>
-              <select
+              <FormSelect
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
               >
                 <option value="1">Active</option>
                 <option value="0">Inactive</option>
-              </select>
+              </FormSelect>
             </div>
             <DialogFooter>
               <Button
@@ -260,6 +275,7 @@ export default function LeadMediumTypesPage() {
           </form>
         </DialogContent>
       </Dialog>
+      {DeleteDialog}
     </div>
   )
 }

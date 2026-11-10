@@ -15,6 +15,14 @@ import {
 } from "@tanstack/react-table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -236,16 +244,19 @@ export function DataTable<TData, TValue>({
           ))}
         </TableHeader>
 
-        <TableBody>
-          {loading ? (
-            <TableRow>
-              <TableCell
-                colSpan={columns.length}
-                className="py-10 text-center text-muted-foreground"
-              >
-                Loading records...
-              </TableCell>
-            </TableRow>
+        <TableBody className={loading && data.length > 0 ? "opacity-75 transition-opacity" : ""}>
+          {loading && data.length === 0 ? (
+            Array.from({ length: 6 }).map((_, rIdx) => (
+              <TableRow key={`sk-${rIdx}`}>
+                {Array.from({ length: Math.max(1, columns.length) }).map(
+                  (__, cIdx) => (
+                    <TableCell key={`sk-${rIdx}-${cIdx}`} className="px-3 py-2.5">
+                      <Skeleton className="h-4 w-full max-w-[140px]" />
+                    </TableCell>
+                  )
+                )}
+              </TableRow>
+            ))
           ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
               <TableRow
@@ -284,17 +295,21 @@ export function DataTable<TData, TValue>({
             </span>
             <div className="flex items-center gap-1.5">
               <span>Rows:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => table.setPageSize(Number(e.target.value))}
-                className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => table.setPageSize(Number(v))}
               >
-                {[10, 25, 50, 100].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger size="sm" className="h-7 w-[68px] bg-background px-2 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" className="min-w-[68px] text-xs">
+                  {[10, 25, 50, 100].map((size) => (
+                    <SelectItem key={size} value={String(size)} className="text-xs">
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

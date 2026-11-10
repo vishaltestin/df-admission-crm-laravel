@@ -4,9 +4,11 @@ import * as React from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { DataTable, type ColumnDef } from "@/components/ui/data-table"
 import {
   Dialog,
@@ -18,8 +20,11 @@ import {
 } from "@/components/ui/dialog"
 
 export default function WebformsPage() {
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [forms, setForms] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [embedForm, setEmbedForm] = React.useState<any>(null)
   const [origin, setOrigin] = React.useState("")
@@ -28,6 +33,7 @@ export default function WebformsPage() {
     fetch("/api/crm-resources?resource=formdesk&sub=web_forms")
       .then((r) => r.json())
       .then((d) => setForms(d.webforms || d.items || []))
+      .finally(() => setLoading(false))
   }, [])
 
   React.useEffect(() => {
@@ -35,15 +41,43 @@ export default function WebformsPage() {
     load()
   }, [load])
 
+  const allChecked = forms.length > 0 && selectedIds.length === forms.length
+
+  function toggleAll(checked: boolean) {
+    setSelectedIds(checked ? forms.map((f) => String(f.id)) : [])
+  }
+
+  function toggleOne(id: string, checked: boolean) {
+    setSelectedIds((prev) =>
+      checked ? [...prev, id] : prev.filter((x) => x !== id)
+    )
+  }
+
+  // Exact columns from df-laravel-crm resources/views/FrontEnd/webforms/index.blade.php:
+  // [Checkbox] | Title | Form ID | Views | Submissions | Conversion | Create Lead | Action
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const columns = React.useMemo<ColumnDef<any>[]>(
     () => [
       {
-        accessorKey: "id",
-        header: "ID",
-        cell: ({ row }) => (
-          <span className="font-mono">#{row.original.id}</span>
+        id: "select",
+        enableSorting: false,
+        header: () => (
+          <Checkbox
+            checked={allChecked}
+            onCheckedChange={(v) => toggleAll(Boolean(v))}
+            aria-label="Select all web forms"
+          />
         ),
+        cell: ({ row }) => {
+          const id = String(row.original.id)
+          return (
+            <Checkbox
+              checked={selectedIds.includes(id)}
+              onCheckedChange={(v) => toggleOne(id, Boolean(v))}
+              aria-label={`Select ${row.original.title}`}
+            />
+          )
+        },
       },
       {
         accessorKey: "title",
@@ -51,11 +85,19 @@ export default function WebformsPage() {
         cell: ({ row }) => (
           <div>
             <div className="font-semibold">{row.original.title}</div>
-            <div className="font-mono text-[10px] text-muted-foreground">
-              {row.original.form_id} •{" "}
-              {(row.original.attributes || []).length} fields
+            <div className="text-[10px] text-muted-foreground">
+              {(row.original.attributes || []).length} fields configured
             </div>
           </div>
+        ),
+      },
+      {
+        accessorKey: "form_id",
+        header: "Form ID",
+        cell: ({ row }) => (
+          <span className="font-mono font-semibold text-[#405189]">
+            {row.original.form_id}
+          </span>
         ),
       },
       {
@@ -63,30 +105,45 @@ export default function WebformsPage() {
         id: "view_count",
         header: "Views",
         cell: ({ row }) => (
-          <Badge variant="secondary" className="font-mono text-[11px]">
-            {row.original.view_count ?? 0}
-          </Badge>
+          <span className="font-mono">{row.original.view_count ?? 0}</span>
         ),
       },
       {
         accessorFn: (f) => Number(f.submit_count ?? 0),
         id: "submit_count",
-        header: "Submits",
+        header: "Submissions",
         cell: ({ row }) => (
-          <Badge className="bg-emerald-100 font-mono text-[11px] text-emerald-700 hover:bg-emerald-200">
+          <span className="font-mono font-semibold">
             {row.original.submit_count ?? 0}
-          </Badge>
+          </span>
         ),
       },
       {
-        accessorFn: (f) => f.created_at || "",
-        id: "created_at",
-        header: "Created At",
+        id: "conversion",
+        header: "Conversion",
+        accessorFn: (f) => {
+          const views = Number(f.view_count ?? 0)
+          const submits = Number(f.submit_count ?? 0)
+          return views > 0 ? Math.round((submits / views) * 100) : 0
+        },
+        cell: ({ row }) => {
+          const views = Number(row.original.view_count ?? 0)
+          const submits = Number(row.original.submit_count ?? 0)
+          const pct = views > 0 ? Math.round((submits / views) * 100) : 0
+          return (
+            <Badge className="border-0 bg-emerald-100 font-mono text-[11px] text-emerald-700 hover:bg-emerald-200">
+              {pct}%
+            </Badge>
+          )
+        },
+      },
+      {
+        id: "create_lead",
+        header: "Create Lead",
+        accessorFn: (f) => (f.create_lead ? "Yes" : "No"),
         cell: ({ row }) => (
-          <span className="whitespace-nowrap text-muted-foreground">
-            {row.original.created_at
-              ? new Date(row.original.created_at).toLocaleDateString("en-IN")
-              : "-"}
+          <span className="font-medium">
+            {row.original.create_lead ? "Yes" : "No"}
           </span>
         ),
       },
@@ -97,7 +154,7 @@ export default function WebformsPage() {
         cell: ({ row }) => {
           const f = row.original
           return (
-            <div className="flex justify-end gap-1.5 whitespace-nowrap">
+            <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
               <Button
                 size="xs"
                 onClick={() => setEmbedForm(f)}
@@ -107,50 +164,57 @@ export default function WebformsPage() {
               </Button>
               <Button
                 asChild
-                size="xs"
+                size="icon-xs"
                 variant="outline"
                 title="View Public WebForm"
-                className="text-[11px]"
               >
                 <Link href={`/webform/${f.form_id}`} target="_blank">
-                  <i className="ri-eye-fill mr-1" /> View
+                  <i className="ri-eye-fill text-muted-foreground" />
                 </Link>
               </Button>
               <Button
                 asChild
-                size="xs"
-                className="bg-amber-500 text-[11px] text-white hover:bg-amber-600"
+                size="icon-xs"
+                variant="outline"
+                title="Edit WebForm"
               >
                 <Link href={`/webforms/${f.id}/edit`}>
-                  <i className="ri-pencil-ruler-2-line mr-1" /> Edit
+                  <i className="ri-pencil-ruler-2-line text-[#405189]" />
                 </Link>
               </Button>
               <Button
-                size="xs"
+                size="icon-xs"
                 variant="destructive"
-                onClick={async () => {
-                  await fetch("/api/crm-resources", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      resource: "web_forms",
-                      action: "delete",
-                      id: f.id,
-                    }),
+                title="Delete WebForm"
+                onClick={() =>
+                  confirmDelete({
+                    title: "Delete Web Form?",
+                    description: `Are you sure you want to delete "${f.title}" (${f.form_id})? Embedded forms using this code will stop working.`,
+                    onConfirm: async () => {
+                      await fetch("/api/crm-resources", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          resource: "web_forms",
+                          action: "delete",
+                          id: f.id,
+                        }),
+                      })
+                      toast.success("WebForm deleted")
+                      load()
+                    },
                   })
-                  toast.success("WebForm deleted")
-                  load()
-                }}
-                className="text-[11px]"
+                }
               >
-                Delete
+                <i className="ri-delete-bin-2-fill" />
               </Button>
             </div>
           )
         },
       },
     ],
-    [load]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allChecked, selectedIds, load, confirmDelete]
   )
 
   const publicUrl = embedForm
@@ -162,21 +226,56 @@ export default function WebformsPage() {
 
   return (
     <div>
-      <BreadcrumbBar parent="FormDesk" title="Web Forms" />
+      <BreadcrumbBar parent="CRM" title="Web Forms" />
       <Card className="gap-0 py-0 text-xs shadow-xs">
         <DataTable
           title="Web Forms"
           columns={columns}
           data={forms}
-          searchPlaceholder="Search webforms..."
+          loading={loading}
+          searchPlaceholder="Search for..."
           toolbarRight={
-            <Button
-              asChild
-              size="sm"
-              className="h-8 bg-[#0ab39c] text-xs font-semibold text-white hover:bg-[#099885]"
-            >
-              <Link href="/webforms/create">+ Create Web Form</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              {selectedIds.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() =>
+                    confirmDelete({
+                      title: `Delete ${selectedIds.length} Web Form(s)?`,
+                      description: `Are you sure you want to permanently delete ${selectedIds.length} selected web form(s)?`,
+                      onConfirm: async () => {
+                        await fetch("/api/crm-resources", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            resource: "web_forms",
+                            action: "bulk_delete",
+                            ids: selectedIds,
+                          }),
+                        })
+                        toast.success(
+                          `Deleted ${selectedIds.length} web form(s)`
+                        )
+                        setSelectedIds([])
+                        load()
+                      },
+                    })
+                  }
+                  className="h-8 text-xs"
+                >
+                  <i className="ri-delete-bin-2-line mr-1" /> Delete (
+                  {selectedIds.length})
+                </Button>
+              )}
+              <Button
+                asChild
+                size="sm"
+                className="h-8 bg-[#405189] text-xs font-semibold text-white hover:bg-[#364574]"
+              >
+                <Link href="/webforms/create">+ Add Web Form</Link>
+              </Button>
+            </div>
           }
         />
       </Card>
@@ -191,7 +290,7 @@ export default function WebformsPage() {
               Embed Code — {embedForm?.title}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Copy and paste this snippet into any external university or partner website.
+              Copy and paste this code in any website:
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -225,10 +324,10 @@ export default function WebformsPage() {
               variant="outline"
               onClick={() => {
                 navigator.clipboard?.writeText(iframeSnippet)
-                toast.success("Embed iframe copied!")
+                toast.success("Embed code copied to clipboard!")
               }}
             >
-              Copy Embed Code
+              Copy Code
             </Button>
             <Button
               onClick={() => setEmbedForm(null)}
@@ -239,6 +338,8 @@ export default function WebformsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {DeleteDialog}
     </div>
   )
 }

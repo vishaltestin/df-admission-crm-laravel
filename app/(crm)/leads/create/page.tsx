@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default function CreateLeadPage() {
   const router = useRouter()
@@ -123,7 +124,7 @@ export default function CreateLeadPage() {
             </div>
             <div>
               <Label className="mb-1 block text-xs">State</Label>
-              <select
+              <FormSelect
                 value={form.state}
                 onChange={(e) =>
                   setForm({ ...form, state: e.target.value, city: "" })
@@ -137,11 +138,11 @@ export default function CreateLeadPage() {
                     {s.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">City</Label>
-              <select
+              <FormSelect
                 value={form.city}
                 onChange={(e) => setForm({ ...form, city: e.target.value })}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -156,11 +157,11 @@ export default function CreateLeadPage() {
                       {c.name}
                     </option>
                   ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Institute</Label>
-              <select
+              <FormSelect
                 value={form.institute_id}
                 onChange={(e) =>
                   setForm({
@@ -179,11 +180,11 @@ export default function CreateLeadPage() {
                     {i.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Program</Label>
-              <select
+              <FormSelect
                 value={form.programme_id}
                 onChange={(e) =>
                   setForm({
@@ -204,11 +205,11 @@ export default function CreateLeadPage() {
                       {p.name}
                     </option>
                   ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Course</Label>
-              <select
+              <FormSelect
                 value={form.faculty_id}
                 onChange={(e) =>
                   setForm({ ...form, faculty_id: e.target.value })
@@ -225,11 +226,11 @@ export default function CreateLeadPage() {
                       {c.name}
                     </option>
                   ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Lead Source</Label>
-              <select
+              <FormSelect
                 value={form.source}
                 onChange={(e) => setForm({ ...form, source: e.target.value })}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -241,11 +242,11 @@ export default function CreateLeadPage() {
                     {s.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Lead Medium / Type</Label>
-              <select
+              <FormSelect
                 value={form.medium}
                 onChange={(e) => setForm({ ...form, medium: e.target.value })}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -257,11 +258,11 @@ export default function CreateLeadPage() {
                     {t.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Assign Counsellor</Label>
-              <select
+              <FormSelect
                 value={form.lead_assign_to}
                 onChange={(e) =>
                   setForm({ ...form, lead_assign_to: e.target.value })
@@ -275,7 +276,7 @@ export default function CreateLeadPage() {
                     {u.first_name} {u.last_name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
           </div>
 

@@ -10,18 +10,17 @@ import { DataTable, type ColumnDef } from "@/components/ui/data-table"
 export default function SmsLogsPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [logs, setLogs] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     fetch("/api/crm-resources?resource=raw_data&sub=sms")
       .then((r) => r.json())
-      .then((d) => {
-        const sms = d.smsLogs || []
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const commSms = (d.comms || []).filter((c: any) => c.channel === "sms")
-        setLogs(sms.length > 0 ? sms : commSms)
-      })
+      .then((d) => setLogs(d.smsLogs || d.items || []))
+      .finally(() => setLoading(false))
   }, [])
 
+  // Exact 8 columns from df-laravel-crm resources/views/FrontEnd/automation/sms.blade.php:
+  // ID | Lead ID | Mobile | Template | Message | Provider | Status | Delivered At
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const columns = React.useMemo<ColumnDef<any>[]>(
     () => [
@@ -29,11 +28,11 @@ export default function SmsLogsPage() {
         accessorKey: "id",
         header: "ID",
         cell: ({ row }) => (
-          <span className="font-mono">#{row.original.id}</span>
+          <span className="font-mono">{row.original.id}</span>
         ),
       },
       {
-        accessorFn: (l) => l.lead_id || "",
+        accessorFn: (l) => l.lead_id || "-",
         id: "lead_id",
         header: "Lead ID",
         cell: ({ row }) =>
@@ -42,34 +41,37 @@ export default function SmsLogsPage() {
               href={`/leads/${row.original.lead_id}`}
               className="font-semibold text-[#405189] hover:underline"
             >
-              Lead #{row.original.lead_id}
+              {row.original.lead_id}
             </Link>
           ) : (
             "-"
           ),
       },
       {
-        accessorFn: (l) => l.mobile || l.to || l.recipient || "-",
+        accessorFn: (l) => l.mobile || "-",
         id: "mobile",
         header: "Mobile",
         cell: ({ row }) => (
-          <span className="font-mono">
-            {row.original.mobile || row.original.to || row.original.recipient || "-"}
-          </span>
+          <span className="font-mono">{row.original.mobile || "-"}</span>
         ),
       },
       {
-        accessorFn: (l) => l.message || l.content || "-",
+        accessorFn: (l) => l.template_name || "-",
+        id: "template_name",
+        header: "Template",
+      },
+      {
+        accessorFn: (l) => l.message || "-",
         id: "message",
         header: "Message",
         cell: ({ row }) => (
-          <span className="max-w-sm line-clamp-2 block">
-            {row.original.message || row.original.content}
+          <span className="block max-w-sm line-clamp-2">
+            {row.original.message || "-"}
           </span>
         ),
       },
       {
-        accessorFn: (l) => (l.provider || "msg91").toUpperCase(),
+        accessorFn: (l) => l.provider || "sms-gateway",
         id: "provider",
         header: "Provider",
       },
@@ -77,18 +79,29 @@ export default function SmsLogsPage() {
         accessorFn: (l) => l.status || "sent",
         id: "status",
         header: "Status",
-        cell: ({ row }) => (
-          <Badge className="bg-emerald-100 text-[10px] font-semibold uppercase text-emerald-700 hover:bg-emerald-200">
-            {row.original.status || "sent"}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const st = String(row.original.status || "sent")
+          return (
+            <Badge
+              className={`text-[10px] font-semibold uppercase ${
+                st === "sent" || st === "delivered"
+                  ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                  : st === "failed"
+                    ? "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                    : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {st}
+            </Badge>
+          )
+        },
       },
       {
         accessorFn: (l) => l.created_at || "",
         id: "created_at",
         header: "Delivered At",
         cell: ({ row }) => (
-          <span className="text-muted-foreground whitespace-nowrap">
+          <span className="whitespace-nowrap text-muted-foreground">
             {row.original.created_at
               ? new Date(row.original.created_at).toLocaleString("en-IN")
               : "-"}
@@ -102,13 +115,14 @@ export default function SmsLogsPage() {
   return (
     <div>
       <BreadcrumbBar parent="CRM" title="SMS Logs" />
-      <Card className="gap-0 py-0 shadow-xs text-xs">
+      <Card className="gap-0 py-0 text-xs shadow-xs">
         <DataTable
-          title={`SMS Delivery Logs (${logs.length})`}
+          title="SMS Delivery Logs"
           columns={columns}
           data={logs}
+          loading={loading}
           searchPlaceholder="Search SMS logs..."
-          emptyMessage="No SMS logs found. Send a test SMS from SMS Settings or Lead Detail!"
+          emptyMessage="No SMS logs found"
         />
       </Card>
     </div>

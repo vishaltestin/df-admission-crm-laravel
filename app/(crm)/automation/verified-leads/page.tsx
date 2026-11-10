@@ -8,11 +8,13 @@ import { DataTable, type ColumnDef } from "@/components/ui/data-table"
 export default function VerifiedLeadsPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [rows, setRows] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     fetch("/api/crm-resources?resource=raw_data&sub=verified")
       .then((r) => r.json())
       .then((d) => setRows(d.items || []))
+      .finally(() => setLoading(false))
   }, [])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,9 +78,10 @@ export default function VerifiedLeadsPage() {
       <BreadcrumbBar parent="CRM" title="Verified Leads" />
       <Card className="gap-0 py-0 shadow-xs text-xs">
         <DataTable
-          title={`Verified Leads (${rows.length})`}
+          title="Verified Leads"
           columns={columns}
           data={rows}
+          loading={loading}
           searchPlaceholder="Search verified leads..."
           emptyMessage="No verified raw leads yet. Convert raw leads from the Raw Leads Queue!"
         />

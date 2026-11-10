@@ -3,6 +3,7 @@
 import * as React from "react"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,6 +37,8 @@ const ROLE_PERMS = [
 ]
 
 export default function RolesPage() {
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
+  const [loading, setLoading] = React.useState(true)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [roles, setRoles] = React.useState<any[]>([])
   const [modalOpen, setModalOpen] = React.useState(false)
@@ -43,14 +46,18 @@ export default function RolesPage() {
     id: "",
     name: "",
     slug: "",
-    permissions: {} as Record<string, boolean>,
+    permissions: [] as string[],
   })
 
   const load = React.useCallback(async () => {
-    const res = await fetch("/api/uac?type=roles")
-    if (res.ok) {
-      const d = await res.json()
-      setRoles(d.items || [])
+    try {
+      const res = await fetch("/api/uac?entity=roles")
+      if (res.ok) {
+        const d = await res.json()
+        setRoles(d.items || [])
+      }
+    } finally {
+      setLoading(false)
     }
   }, [])
 
@@ -61,20 +68,28 @@ export default function RolesPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const openEdit = React.useCallback((r?: any) => {
     if (r) {
-      let parsed = {}
+      let parsed: string[] = []
       try {
-        parsed = r.permissions ? JSON.parse(r.permissions) : {}
+        const raw = r.permissions ? JSON.parse(r.permissions) : []
+        if (Array.isArray(raw)) {
+          parsed = raw
+        } else if (raw && typeof raw === "object") {
+          parsed = Object.keys(raw).filter((k) => Boolean(raw[k]))
+        }
       } catch {
-        parsed = {}
+        parsed = []
+      }
+      if (r.permission_type === "all") {
+        parsed = [...ROLE_PERMS]
       }
       setForm({
         id: String(r.id),
-        name: r.name,
-        slug: r.slug,
+        name: r.name || "",
+        slug: r.slug || "",
         permissions: parsed,
       })
     } else {
-      setForm({ id: "", name: "", slug: "", permissions: {} })
+      setForm({ id: "", name: "", slug: "", permissions: [] })
     }
     setModalOpen(true)
   }, [])
@@ -104,25 +119,69 @@ export default function RolesPage() {
         ),
       },
       {
+        accessorKey: "permission_type",
+        header: "Access Type",
+        cell: ({ row }) => (
+          <span className="capitalize">
+            {row.original.permission_type || "custom"}
+          </span>
+        ),
+      },
+      {
         id: "actions",
         header: () => <div className="text-right">Actions</div>,
         enableSorting: false,
-        cell: ({ row }) => (
-          <div className="text-right">
-            <Button
-              type="button"
-              size="xs"
-              variant="secondary"
-              onClick={() => openEdit(row.original)}
-              className="bg-[#405189]/15 font-semibold text-[#405189] hover:bg-[#405189]/25"
-            >
-              Configure Permissions
-            </Button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const r = row.original
+          const isProtected = ["root", "sadmin", "admin"].includes(
+            String(r.slug || "").toLowerCase()
+          )
+          return (
+            <div className="flex justify-end gap-1.5">
+              <Button
+                type="button"
+                size="xs"
+                variant="secondary"
+                onClick={() => openEdit(r)}
+                className="bg-[#405189]/15 font-semibold text-[#405189] hover:bg-[#405189]/25"
+              >
+                Configure Permissions
+              </Button>
+              {!isProtected && (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="destructive"
+                  onClick={() =>
+                    confirmDelete({
+                      title: "Delete Role?",
+                      description: `Are you sure you want to permanently delete role "${r.name}"?`,
+                      onConfirm: async () => {
+                        await fetch("/api/uac", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            entity: "roles",
+                            action: "delete",
+                            id: r.id,
+                          }),
+                        })
+                        toast.success("Role deleted")
+                        load()
+                      },
+                    })
+                  }
+                  className="text-[11px]"
+                >
+                  Delete
+                </Button>
+              )}
+            </div>
+          )
+        },
       },
     ],
-    [openEdit]
+    [openEdit, confirmDelete, load]
   )
 
   return (
@@ -131,9 +190,10 @@ export default function RolesPage() {
 
       <Card className="gap-0 py-0 shadow-xs">
         <DataTable
-          title="System Roles"
+          title={`System Roles (${roles.length})`}
           columns={columns}
           data={roles}
+          loading={loading}
           searchPlaceholder="Search roles..."
           toolbarRight={
             <Button
@@ -149,7 +209,7 @@ export default function RolesPage() {
       </Card>
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-lg text-xs">
+        <DialogContent className="text-xs sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold">
               {form.id ? `Edit Role: ${form.name}` : "Create New Role"}
@@ -161,18 +221,29 @@ export default function RolesPage() {
           <form
             onSubmit={async (e) => {
               e.preventDefault()
-              await fetch("/api/uac", {
+              const res = await fetch("/api/uac", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  type: "roles",
+                  entity: "roles",
                   action: form.id ? "update" : "create",
-                  ...form,
+                  id: form.id || undefined,
+                  name: form.name,
+                  slug: form.slug,
+                  permission_type:
+                    form.permissions.length === ROLE_PERMS.length
+                      ? "all"
+                      : "custom",
+                  permissions: form.permissions,
                 }),
               })
-              toast.success("Role & permissions saved!")
-              setModalOpen(false)
-              load()
+              if (res.ok) {
+                toast.success("Role & permissions saved!")
+                setModalOpen(false)
+                load()
+              } else {
+                toast.error("Failed to save role")
+              }
             }}
             className="space-y-4"
           >
@@ -187,37 +258,63 @@ export default function RolesPage() {
                 />
               </div>
               <div>
-                <Label className="mb-1 block text-xs">Slug</Label>
+                <Label className="mb-1 block text-xs">Slug *</Label>
                 <Input
+                  required
                   value={form.slug}
-                  disabled={Boolean(form.id)}
                   onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                  className="h-9 text-xs"
+                  className="h-9 font-mono text-xs"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {ROLE_PERMS.map((pk) => (
-                <label
-                  key={pk}
-                  className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2"
-                >
-                  <Checkbox
-                    checked={Boolean(form.permissions[pk])}
-                    onCheckedChange={(v) =>
-                      setForm({
-                        ...form,
-                        permissions: {
-                          ...form.permissions,
-                          [pk]: Boolean(v),
-                        },
-                      })
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <Label className="text-xs font-semibold">
+                  Module Permissions
+                </Label>
+                <div className="flex gap-1.5">
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    onClick={() =>
+                      setForm({ ...form, permissions: [...ROLE_PERMS] })
                     }
-                  />
-                  <span>{pk}</span>
-                </label>
-              ))}
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    onClick={() => setForm({ ...form, permissions: [] })}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+              <div className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto rounded-md border border-border p-3">
+                {ROLE_PERMS.map((perm) => (
+                  <label
+                    key={perm}
+                    className="flex cursor-pointer items-center gap-2 text-xs"
+                  >
+                    <Checkbox
+                      checked={form.permissions.includes(perm)}
+                      onCheckedChange={(checked) => {
+                        setForm((prev) => ({
+                          ...prev,
+                          permissions: checked
+                            ? [...prev.permissions, perm]
+                            : prev.permissions.filter((p) => p !== perm),
+                        }))
+                      }}
+                    />
+                    <span className="font-mono text-[11px]">{perm}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <DialogFooter>
@@ -230,7 +327,7 @@ export default function RolesPage() {
               </Button>
               <Button
                 type="submit"
-                className="bg-[#0ab39c] text-white hover:bg-[#099885]"
+                className="bg-[#405189] text-white hover:bg-[#364574]"
               >
                 Save Role
               </Button>
@@ -238,6 +335,8 @@ export default function RolesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {DeleteDialog}
     </div>
   )
 }

@@ -40,18 +40,37 @@ export async function POST(req: NextRequest) {
 
   if (action === "reassign") {
     const newOwner = BigInt(body.reassign_to || 0)
+    const reassignType =
+      body.reassign_type === "remove_and_add" ? "remove_and_add" : "add_owner"
     await prisma.leads.updateMany({
       where: { id: { in: ids }, organization_id: BigInt(ctx.orgId) },
       data: { lead_assign_to: newOwner, updated_at: now },
     })
     for (const lid of ids) {
+      if (newOwner > BigInt(0)) {
+        await prisma.lead_assignment_logs.create({
+          data: {
+            lead_id: lid,
+            organization_id: BigInt(ctx.orgId),
+            assigned_to: newOwner,
+            rule_type: reassignType,
+            is_reassign: true,
+            notes:
+              reassignType === "remove_and_add"
+                ? "Previous owner removed & new owner assigned"
+                : "Owner added via Re-assign Leads",
+            created_at: now,
+            updated_at: now,
+          },
+        })
+      }
       await prisma.lead_activity_logs.create({
         data: {
           organization_id: BigInt(ctx.orgId),
           lead_id: lid,
           user_id: BigInt(ctx.userId),
           action: "bulk_reassigned",
-          description: `Lead reassigned in bulk to user #${newOwner}`,
+          description: `Lead reassigned to user #${newOwner} (${reassignType === "remove_and_add" ? "Remove & Add" : "Add Owner"})`,
           created_at: now,
           updated_at: now,
         },

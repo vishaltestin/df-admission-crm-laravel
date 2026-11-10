@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,8 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default function LeadSubStatusesPage() {
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [statuses, setStatuses] = React.useState<any[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,19 +148,25 @@ export default function LeadSubStatusesPage() {
               <Button
                 size="xs"
                 variant="destructive"
-                onClick={async () => {
-                  await fetch("/api/crm-resources", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      resource: "sub_statuses",
-                      action: "delete",
-                      id: s.id,
-                    }),
+                onClick={() =>
+                  confirmDelete({
+                    title: "Delete Sub-Status?",
+                    description: `Are you sure you want to delete sub-status "${s.name}"?`,
+                    onConfirm: async () => {
+                      await fetch("/api/crm-resources", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          resource: "sub_statuses",
+                          action: "delete",
+                          id: s.id,
+                        }),
+                      })
+                      toast.success("Sub-status deleted")
+                      load()
+                    },
                   })
-                  toast.success("Sub-status deleted")
-                  load()
-                }}
+                }
                 className="text-[11px]"
               >
                 Delete
@@ -167,7 +176,7 @@ export default function LeadSubStatusesPage() {
         },
       },
     ],
-    [statusMap, load]
+    [statusMap, load, confirmDelete]
   )
 
   return (
@@ -287,7 +296,7 @@ export default function LeadSubStatusesPage() {
           >
             <div>
               <Label className="mb-1 block text-xs">Parent Main Status *</Label>
-              <select
+              <FormSelect
                 required
                 value={form.status_id}
                 onChange={(e) =>
@@ -300,7 +309,7 @@ export default function LeadSubStatusesPage() {
                     {st.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Sub-Status Name *</Label>
@@ -326,7 +335,7 @@ export default function LeadSubStatusesPage() {
               </div>
               <div>
                 <Label className="mb-1 block text-xs">State</Label>
-                <select
+                <FormSelect
                   value={form.is_active ? "1" : "0"}
                   onChange={(e) =>
                     setForm({ ...form, is_active: e.target.value === "1" })
@@ -335,7 +344,7 @@ export default function LeadSubStatusesPage() {
                 >
                   <option value="1">Active</option>
                   <option value="0">Inactive</option>
-                </select>
+                </FormSelect>
               </div>
             </div>
             <DialogFooter>
@@ -356,6 +365,7 @@ export default function LeadSubStatusesPage() {
           </form>
         </DialogContent>
       </Dialog>
+      {DeleteDialog}
     </div>
   )
 }

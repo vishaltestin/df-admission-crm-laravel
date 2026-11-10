@@ -16,6 +16,10 @@ import {
 } from "@tanstack/react-table"
 import { toast } from "sonner"
 import { formatDateShort, formatDateTime } from "@/lib/serialize"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
+import { LeadCreateApiModal } from "@/components/crm/lead-create-api-modal"
+import { FormSelect } from "@/components/ui/form-select"
+import { DatePicker, DateTimePicker } from "@/components/ui/date-time-picker"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -65,6 +69,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
+import { RichTextEditor } from "@/components/ui/rich-text-editor"
 
 const ALL_COLUMN_DEFS = [
   { key: "name", label: "Name" },
@@ -208,13 +214,17 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
   const [uploadTypeModalOpen, setUploadTypeModalOpen] = React.useState(false)
   const [uploadPrimaryKey, setUploadPrimaryKey] = React.useState<"email" | "mobile">("mobile")
   const [apiDocModalOpen, setApiDocModalOpen] = React.useState(false)
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
   const [columnModalOpen, setColumnModalOpen] = React.useState(false)
   const [dupModalLead, setDupModalLead] = React.useState<LeadRow | null>(null)
 
   // Single / Bulk target modal states
+  const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false)
   const [targetLeadIds, setTargetLeadIds] = React.useState<number[]>([])
   const [commDrawerOpen, setCommDrawerOpen] = React.useState(false)
   const [commTab, setCommTab] = React.useState<"email" | "sms" | "whatsapp">("email")
+  const [commTemplateId, setCommTemplateId] = React.useState("")
+  const [commFromEmail, setCommFromEmail] = React.useState(userEmail || "")
   const [commSubject, setCommSubject] = React.useState("")
   const [commMessage, setCommMessage] = React.useState("")
 
@@ -237,9 +247,16 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
 
   const [noteModalOpen, setNoteModalOpen] = React.useState(false)
   const [noteText, setNoteText] = React.useState("")
+  const [noteLeadName, setNoteLeadName] = React.useState("")
+  const [noteActivitiesLoading, setNoteActivitiesLoading] = React.useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [notePrevNotes, setNotePrevNotes] = React.useState<any[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [notePrevActivities, setNotePrevActivities] = React.useState<any[]>([])
 
   const [reassignModalOpen, setReassignModalOpen] = React.useState(false)
   const [reassignUserId, setReassignUserId] = React.useState("")
+  const [reassignType, setReassignType] = React.useState<"add_owner" | "remove_and_add">("add_owner")
 
   const [pipelineModalOpen, setPipelineModalOpen] = React.useState(false)
   const [movePipelineId, setMovePipelineId] = React.useState("")
@@ -274,10 +291,6 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
     campaign: "",
     lead_marketing_event: "",
   })
-
-  // API tester state inside API Docs modal
-  const [apiTestName, setApiTestName] = React.useState("Karan Oberoi")
-  const [apiTestMobile, setApiTestMobile] = React.useState("9899887766")
 
   const filtersRef = React.useRef(filters)
   filtersRef.current = filters
@@ -325,13 +338,17 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
         if (res.ok) {
           const data = await res.json()
           setLeads(Array.isArray(data.items) ? data.items : [])
-          setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+          setHasLoadedOnce(true)
+          if (overrideFilters !== undefined || overrideSearch !== undefined) {
+            setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+          }
         }
       } catch (err) {
         if ((err as Error)?.name === "AbortError") return
       } finally {
         if (abortRef.current === controller) {
           setLoading(false)
+          setHasLoadedOnce(true)
         }
       }
     },
@@ -888,9 +905,25 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
     cb(selectedIds)
   }
 
+  async function loadLeadActivities(leadId: number) {
+    setNoteActivitiesLoading(true)
+    try {
+      const res = await fetch(`/api/leads/${leadId}`)
+      if (res.ok) {
+        const d = await res.json()
+        setNotePrevNotes(Array.isArray(d.notes) ? d.notes : [])
+        setNotePrevActivities(Array.isArray(d.activities) ? d.activities : [])
+      }
+    } finally {
+      setNoteActivitiesLoading(false)
+    }
+  }
+
   function openSingleRowAction(lead: LeadRow, action: string) {
     setTargetLeadIds([lead.id])
     if (action === "communicate") {
+      setCommTemplateId("")
+      setCommFromEmail(userEmail || "")
       setCommSubject("")
       setCommMessage("")
       setCommDrawerOpen(true)
@@ -901,12 +934,17 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
       setStageDrawerOpen(true)
     } else if (action === "reassign") {
       setReassignUserId(lead.lead_assign_to ? String(lead.lead_assign_to) : "")
+      setReassignType("add_owner")
       setReassignModalOpen(true)
     } else if (action === "event") {
       setEventDrawerOpen(true)
     } else if (action === "note") {
       setNoteText("")
+      setNoteLeadName(lead.name || `Lead #${lead.id}`)
+      setNotePrevNotes([])
+      setNotePrevActivities([])
       setNoteModalOpen(true)
+      loadLeadActivities(lead.id)
     } else if (action === "delete") {
       setDeleteModalOpen(true)
     }
@@ -970,12 +1008,13 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
     const res = await fetch(`/api/leads/${targetLeadIds[0]}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add_note", note: noteText }),
+      body: JSON.stringify({ action: "add_note", note: noteText.slice(0, 1024) }),
     })
     if (res.ok) {
       toast.success("Note added to lead")
-      setNoteModalOpen(false)
       setNoteText("")
+      loadLeadActivities(targetLeadIds[0])
+      fetchLeads()
     }
   }
 
@@ -1062,25 +1101,6 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
     toast.success("Downloading CSV export...")
   }
 
-  async function handleTestPublicApi(e: React.FormEvent) {
-    e.preventDefault()
-    const res = await fetch("/api/leads/add", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: apiTestName,
-        mobile: apiTestMobile,
-        email: `${apiTestName.toLowerCase().replace(/\s+/g, ".")}@gmail.com`,
-      }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-      toast.success(`API Lead Captured! Lead ID #${data.lead_id}`)
-      setApiDocModalOpen(false)
-      fetchLeads()
-    }
-  }
-
   return (
     <Card className="gap-0 py-0 shadow-xs">
       {/* ==================== CARD HEADER ==================== */}
@@ -1107,7 +1127,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
 
           {/* Saved Filters Dropdown */}
           <div className="flex items-center gap-1.5">
-            <select
+            <FormSelect
               value={activeSavedFilterId}
               onChange={(e) => handleSelectSavedFilter(e.target.value)}
               className="h-9 rounded-md border border-input bg-background px-3 text-xs outline-none focus:border-[#405189]"
@@ -1118,26 +1138,33 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                   {sf.name} {sf.is_default ? "(Default)" : ""}
                 </option>
               ))}
-            </select>
+            </FormSelect>
             {activeSavedFilterId && (
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
                 title="Delete saved filter"
-                onClick={async () => {
-                  await fetch("/api/leads/preferences", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      action: "delete_filter",
-                      id: activeSavedFilterId,
-                    }),
+                onClick={() =>
+                  confirmDelete({
+                    title: "Delete Saved Filter?",
+                    description:
+                      "Are you sure you want to delete this saved filter preset?",
+                    onConfirm: async () => {
+                      await fetch("/api/leads/preferences", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "delete_filter",
+                          id: activeSavedFilterId,
+                        }),
+                      })
+                      setActiveSavedFilterId("")
+                      fetchPreferences()
+                      toast.success("Saved filter deleted")
+                    },
                   })
-                  setActiveSavedFilterId("")
-                  fetchPreferences()
-                  toast.success("Saved filter deleted")
-                }}
+                }
                 className="size-9 text-[#f06548] hover:bg-[#f06548]/10 hover:text-[#f06548]"
               >
                 <i className="ri-delete-bin-line" />
@@ -1352,16 +1379,19 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
           ))}
         </TableHeader>
 
-        <TableBody>
-          {loading ? (
-            <TableRow>
-              <TableCell
-                colSpan={table.getVisibleLeafColumns().length}
-                className="py-12 text-center text-muted-foreground"
-              >
-                Loading leads...
-              </TableCell>
-            </TableRow>
+        <TableBody className={loading && leads.length > 0 ? "opacity-75 transition-opacity" : ""}>
+          {loading && !hasLoadedOnce && leads.length === 0 ? (
+            Array.from({ length: 8 }).map((_, rIdx) => (
+              <TableRow key={`lead-sk-${rIdx}`}>
+                {Array.from({
+                  length: Math.max(1, table.getVisibleLeafColumns().length),
+                }).map((__, cIdx) => (
+                  <TableCell key={`lead-sk-${rIdx}-${cIdx}`} className="py-2.5">
+                    <Skeleton className="h-4 w-full max-w-[140px]" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
           ) : table.getRowModel().rows.length === 0 ? (
             <TableRow>
               <TableCell
@@ -1429,7 +1459,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
           </span>
           <div className="flex items-center gap-1.5">
             <span>Rows:</span>
-            <select
+            <FormSelect
               value={pagination.pageSize}
               onChange={(e) => table.setPageSize(Number(e.target.value))}
               className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground"
@@ -1439,7 +1469,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                   {sz}
                 </option>
               ))}
-            </select>
+            </FormSelect>
           </div>
         </div>
 
@@ -1565,7 +1595,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                 />
               )}
 
-              <select
+              <FormSelect
                 value={qlForm.state}
                 onChange={(e) =>
                   setQlForm({ ...qlForm, state: e.target.value, city: "" })
@@ -1579,9 +1609,9 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {s.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
 
-              <select
+              <FormSelect
                 value={qlForm.city}
                 onChange={(e) => setQlForm({ ...qlForm, city: e.target.value })}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -1593,9 +1623,9 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
 
-              <select
+              <FormSelect
                 value={qlForm.institute_id}
                 onChange={(e) =>
                   setQlForm({
@@ -1614,9 +1644,9 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {i.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
 
-              <select
+              <FormSelect
                 value={qlForm.programme_id}
                 onChange={(e) =>
                   setQlForm({
@@ -1634,9 +1664,9 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {p.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
 
-              <select
+              <FormSelect
                 value={qlForm.faculty_id}
                 onChange={(e) =>
                   setQlForm({ ...qlForm, faculty_id: e.target.value })
@@ -1650,9 +1680,9 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
 
-              <select
+              <FormSelect
                 value={qlForm.application_form_id}
                 onChange={(e) =>
                   setQlForm({ ...qlForm, application_form_id: e.target.value })
@@ -1666,10 +1696,10 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {f.title} (₹{f.total_amount})
                   </option>
                 ))}
-              </select>
+              </FormSelect>
 
               <div className="grid grid-cols-2 gap-2">
-                <select
+                <FormSelect
                   value={qlForm.source}
                   onChange={(e) =>
                     setQlForm({ ...qlForm, source: e.target.value })
@@ -1683,9 +1713,9 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                       {s.name}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
 
-                <select
+                <FormSelect
                   value={qlForm.medium}
                   onChange={(e) =>
                     setQlForm({ ...qlForm, medium: e.target.value })
@@ -1699,11 +1729,11 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                       {m.name}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <select
+                <FormSelect
                   value={qlForm.campaign}
                   onChange={(e) =>
                     setQlForm({ ...qlForm, campaign: e.target.value })
@@ -1717,9 +1747,9 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                       {c.name}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
 
-                <select
+                <FormSelect
                   value={qlForm.lead_marketing_event}
                   onChange={(e) =>
                     setQlForm({
@@ -1736,7 +1766,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                       {ev.name}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
 
               <div>
@@ -1810,21 +1840,15 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                 Date Range
               </Label>
               <div className="grid grid-cols-2 gap-2">
-                <Input
-                  type="date"
+                <DatePicker
                   value={filters.date_from}
-                  onChange={(e) =>
-                    setFilters({ ...filters, date_from: e.target.value })
-                  }
-                  className="h-9 text-xs"
+                  onChange={(v) => setFilters({ ...filters, date_from: v })}
+                  placeholder="From date"
                 />
-                <Input
-                  type="date"
+                <DatePicker
                   value={filters.date_to}
-                  onChange={(e) =>
-                    setFilters({ ...filters, date_to: e.target.value })
-                  }
-                  className="h-9 text-xs"
+                  onChange={(v) => setFilters({ ...filters, date_to: v })}
+                  placeholder="To date"
                 />
               </div>
             </div>
@@ -1866,7 +1890,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
               <Label className="block text-xs font-semibold text-muted-foreground">
                 Location
               </Label>
-              <select
+              <FormSelect
                 value={filters.state}
                 onChange={(e) =>
                   setFilters({ ...filters, state: e.target.value, city: "" })
@@ -1880,8 +1904,8 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {s.name}
                   </option>
                 ))}
-              </select>
-              <select
+              </FormSelect>
+              <FormSelect
                 value={filters.city}
                 onChange={(e) =>
                   setFilters({ ...filters, city: e.target.value })
@@ -1895,14 +1919,14 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
 
             <div className="space-y-2">
               <Label className="block text-xs font-semibold text-muted-foreground">
                 Academic & CRM Status
               </Label>
-              <select
+              <FormSelect
                 value={filters.institute_id}
                 onChange={(e) =>
                   setFilters({ ...filters, institute_id: e.target.value })
@@ -1916,8 +1940,8 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {i.name}
                   </option>
                 ))}
-              </select>
-              <select
+              </FormSelect>
+              <FormSelect
                 value={filters.lead_source_id}
                 onChange={(e) =>
                   setFilters({ ...filters, lead_source_id: e.target.value })
@@ -1931,8 +1955,8 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {s.name}
                   </option>
                 ))}
-              </select>
-              <select
+              </FormSelect>
+              <FormSelect
                 value={filters.lead_status_id}
                 onChange={(e) =>
                   setFilters({ ...filters, lead_status_id: e.target.value })
@@ -1946,7 +1970,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {st.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
               <label className="flex items-center gap-2 pt-1 cursor-pointer">
                 <Checkbox
                   checked={filters.unassigned === "1"}
@@ -2013,8 +2037,9 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
         <SheetContent side="right" className="flex w-full sm:max-w-xl flex-col p-0">
           <SheetHeader className="border-b border-border px-4 py-3.5">
             <SheetTitle className="text-sm font-semibold">
-              Communication ({targetLeadIds.length} lead
-              {targetLeadIds.length > 1 ? "s" : ""})
+              {targetLeadIds.length > 1
+                ? `Bulk Communication (${targetLeadIds.length} leads)`
+                : "Single Communication"}
             </SheetTitle>
             <SheetDescription className="text-xs">
               Send Email, SMS, or WhatsApp messages using CRM templates.
@@ -2024,22 +2049,53 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
           <div className="flex-1 space-y-4 overflow-y-auto p-4 text-xs">
             <Tabs
               value={commTab}
-              onValueChange={(v) => setCommTab(v as "email" | "sms" | "whatsapp")}
+              onValueChange={(v) => {
+                setCommTab(v as "email" | "sms" | "whatsapp")
+                setCommTemplateId("")
+              }}
             >
               <TabsList className="h-8">
                 {(["email", "sms", "whatsapp"] as const).map((ch) => (
                   <TabsTrigger key={ch} value={ch} className="text-xs uppercase">
-                    {ch}
+                    {ch === "email" ? (
+                      <span className="inline-flex items-center gap-1">
+                        <i className="ri-mail-line" /> Email
+                      </span>
+                    ) : ch === "sms" ? (
+                      <span className="inline-flex items-center gap-1">
+                        <i className="ri-message-2-line" /> SMS
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <i className="ri-whatsapp-line text-emerald-600" /> WhatsApp
+                      </span>
+                    )}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </Tabs>
 
+            {commTab === "email" && (
+              <div>
+                <Label className="mb-1 block text-xs">From Email</Label>
+                <FormSelect
+                  value={commFromEmail}
+                  onChange={(e) => setCommFromEmail(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                >
+                  <option value={userEmail}>{userEmail}</option>
+                </FormSelect>
+              </div>
+            )}
+
             <div>
               <Label className="mb-1 block text-xs">Template</Label>
-              <select
+              <FormSelect
+                value={commTemplateId}
                 onChange={(e) => {
                   const tplId = e.target.value
+                  setCommTemplateId(tplId)
+                  if (!tplId) return
                   const pool =
                     commTab === "email"
                       ? initialMaster.emailTemplates
@@ -2050,7 +2106,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                   const found = pool.find((t: any) => String(t.id) === tplId)
                   if (found) {
                     if (found.subject) setCommSubject(found.subject)
-                    setCommMessage(found.message || "")
+                    setCommMessage(found.message || found.content || "")
                   }
                 }}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -2064,45 +2120,65 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ).map((t: any) => (
                   <option key={t.id} value={t.id}>
-                    {t.title}
+                    {t.title || t.name || `Template #${t.id}`}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
 
             {commTab === "email" && (
-              <>
-                <div>
-                  <Label className="mb-1 block text-xs">From Email</Label>
-                  <Input
-                    type="text"
-                    readOnly
-                    value={userEmail}
-                    className="h-9 bg-muted text-xs"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">Subject</Label>
-                  <Input
-                    type="text"
-                    value={commSubject}
-                    onChange={(e) => setCommSubject(e.target.value)}
-                    placeholder="Enter email subject"
-                    className="h-9 text-xs"
-                  />
-                </div>
-              </>
+              <div>
+                <Label className="mb-1 block text-xs">Subject</Label>
+                <Input
+                  type="text"
+                  value={commSubject}
+                  onChange={(e) => setCommSubject(e.target.value)}
+                  placeholder="Enter email subject"
+                  className="h-9 text-xs"
+                />
+              </div>
             )}
 
             <div>
-              <Label className="mb-1 block text-xs">Message Text</Label>
-              <Textarea
-                rows={6}
-                value={commMessage}
-                onChange={(e) => setCommMessage(e.target.value)}
-                placeholder={`Enter ${commTab.toUpperCase()} message...`}
-                className="text-xs"
-              />
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1">
+                <Label className="text-xs">
+                  {commTab === "email" ? "Email Body" : "Message Text"}
+                </Label>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    "{lead_name}",
+                    "{lead_mobile}",
+                    "{lead_email}",
+                    "{application_link}",
+                  ].map((token) => (
+                    <button
+                      key={token}
+                      type="button"
+                      onClick={() =>
+                        setCommMessage((prev) => `${prev}${prev ? " " : ""}${token}`)
+                      }
+                      className="rounded border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      +{token}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {commTab === "email" ? (
+                <RichTextEditor
+                  value={commMessage}
+                  onChange={setCommMessage}
+                  placeholder="Compose email content..."
+                />
+              ) : (
+                <Textarea
+                  rows={6}
+                  value={commMessage}
+                  onChange={(e) => setCommMessage(e.target.value)}
+                  placeholder={`Enter ${commTab.toUpperCase()} message...`}
+                  className="text-xs"
+                />
+              )}
             </div>
           </div>
 
@@ -2120,6 +2196,8 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                 runBulkOrSingleApi(
                   {
                     action: commTab,
+                    from_email: commFromEmail,
+                    template_id: commTemplateId || undefined,
                     subject: commSubject,
                     message: commMessage,
                   },
@@ -2132,7 +2210,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                   : "bg-[#405189] hover:bg-[#364574]"
               }`}
             >
-              Send {commTab === "email" ? "Now" : commTab.toUpperCase()}
+              Send {commTab === "email" ? "Now" : commTab === "whatsapp" ? "WhatsApp" : "SMS"}
             </Button>
           </SheetFooter>
         </SheetContent>
@@ -2154,7 +2232,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
           <div className="flex-1 space-y-3.5 overflow-y-auto p-4 text-xs">
             <div>
               <Label className="mb-1 block text-xs">Lead Status</Label>
-              <select
+              <FormSelect
                 value={stageStatusId}
                 onChange={(e) => {
                   setStageStatusId(e.target.value)
@@ -2169,12 +2247,12 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {s.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
 
             <div>
               <Label className="mb-1 block text-xs">Lead Sub Stage</Label>
-              <select
+              <FormSelect
                 value={stageSubStatusId}
                 onChange={(e) => setStageSubStatusId(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -2186,16 +2264,15 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {ss.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
 
             <div>
               <Label className="mb-1 block text-xs">Followup Date</Label>
-              <Input
-                type="datetime-local"
+              <DateTimePicker
                 value={stageFollowup}
-                onChange={(e) => setStageFollowup(e.target.value)}
-                className="h-9 text-xs"
+                onChange={(v) => setStageFollowup(v)}
+                placeholder="Pick follow-up date & time"
               />
             </div>
 
@@ -2270,30 +2347,24 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="mb-1 block text-xs">From *</Label>
-                <Input
-                  type="datetime-local"
+                <DateTimePicker
                   value={eventForm.start_at}
-                  onChange={(e) =>
-                    setEventForm({ ...eventForm, start_at: e.target.value })
-                  }
-                  className="h-9 text-xs"
+                  onChange={(v) => setEventForm({ ...eventForm, start_at: v })}
+                  placeholder="Start date & time"
                 />
               </div>
               <div>
                 <Label className="mb-1 block text-xs">To</Label>
-                <Input
-                  type="datetime-local"
+                <DateTimePicker
                   value={eventForm.end_at}
-                  onChange={(e) =>
-                    setEventForm({ ...eventForm, end_at: e.target.value })
-                  }
-                  className="h-9 text-xs"
+                  onChange={(v) => setEventForm({ ...eventForm, end_at: v })}
+                  placeholder="End date & time"
                 />
               </div>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Event Type *</Label>
-              <select
+              <FormSelect
                 value={eventForm.event_type}
                 onChange={(e) =>
                   setEventForm({ ...eventForm, event_type: e.target.value })
@@ -2304,11 +2375,11 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                 <option value="video_call">Video Call</option>
                 <option value="meeting">Meeting</option>
                 <option value="lunch">Lunch</option>
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Owner</Label>
-              <select
+              <FormSelect
                 value={eventForm.owner_id}
                 onChange={(e) =>
                   setEventForm({ ...eventForm, owner_id: e.target.value })
@@ -2322,7 +2393,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                     {u.first_name} {u.last_name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
             <div>
               <Label className="mb-1 block text-xs">Description</Label>
@@ -2365,28 +2436,62 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold">
-              Re-assign Leads ({targetLeadIds.length})
+              {targetLeadIds.length > 1
+                ? `Re-assign Leads (${targetLeadIds.length})`
+                : "Re-assign Lead"}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Transfer ownership of selected leads to an admissions counsellor.
+              Transfer or share ownership of selected lead(s) with an admissions counsellor.
             </DialogDescription>
           </DialogHeader>
-          <div className="text-xs">
-            <Label className="mb-1.5 block text-xs">Re-assigned to *</Label>
-            <select
-              value={reassignUserId}
-              onChange={(e) => setReassignUserId(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
-            >
-              <option value="">Select counsellor</option>
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              {initialMaster.users.map((u: any) => (
-                <option key={u.id} value={u.id}>
-                  {u.first_name} {u.last_name} ({u.email})
-                </option>
-              ))}
-            </select>
+
+          <div className="space-y-4 text-xs">
+            <div>
+              <Label className="mb-1.5 block text-xs">Re-assigned to *</Label>
+              <FormSelect
+                value={reassignUserId}
+                onChange={(e) => setReassignUserId(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+              >
+                <option value="">Select User</option>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {initialMaster.users.map((u: any) => (
+                  <option key={u.id} value={u.id}>
+                    {u.first_name} {u.last_name} ({u.email})
+                  </option>
+                ))}
+              </FormSelect>
+            </div>
+
+            <div>
+              <Label className="mb-1.5 block text-xs">Type</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReassignType("add_owner")}
+                  className={`flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-xs font-semibold transition-colors ${
+                    reassignType === "add_owner"
+                      ? "border-[#405189] bg-[#405189] text-white"
+                      : "border-border bg-background text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <i className="ri-user-add-line" /> Add Owner
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReassignType("remove_and_add")}
+                  className={`flex h-9 items-center justify-center gap-1.5 rounded-md border px-3 text-xs font-semibold transition-colors ${
+                    reassignType === "remove_and_add"
+                      ? "border-[#405189] bg-[#405189] text-white"
+                      : "border-border bg-background text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <i className="ri-user-shared-2-line" /> Remove &amp; Add
+                </button>
+              </div>
+            </div>
           </div>
+
           <DialogFooter>
             <Button
               type="button"
@@ -2397,15 +2502,20 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
             </Button>
             <Button
               type="button"
+              disabled={!reassignUserId}
               onClick={() =>
                 runBulkOrSingleApi(
-                  { action: "reassign", reassign_to: reassignUserId },
+                  {
+                    action: "reassign",
+                    reassign_to: reassignUserId,
+                    reassign_type: reassignType,
+                  },
                   () => setReassignModalOpen(false)
                 )
               }
               className="bg-[#405189] text-white hover:bg-[#364574]"
             >
-              Reassign Leads
+              Submit
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2413,39 +2523,122 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
 
       {/* ==================== 7. SHADCN DIALOG: ADD NOTE ==================== */}
       <Dialog open={noteModalOpen} onOpenChange={setNoteModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form onSubmit={handleAddSingleNote} className="space-y-4">
+        <DialogContent className="sm:max-w-lg">
+          <form onSubmit={handleAddSingleNote} className="space-y-3">
             <DialogHeader>
               <DialogTitle className="text-sm font-semibold">
-                Add Lead Note
+                Add Lead Note {noteLeadName ? `— ${noteLeadName}` : ""}
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Log internal counselling remarks on this student&apos;s timeline.
+                Log internal counselling remarks and review previous activities.
               </DialogDescription>
             </DialogHeader>
-            <Textarea
-              rows={4}
-              required
-              placeholder="Write counselling notes..."
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              className="text-xs"
-            />
-            <DialogFooter>
+
+            <div>
+              <Label className="mb-1 block text-xs">Note</Label>
+              <Textarea
+                rows={4}
+                required
+                maxLength={1024}
+                placeholder="Write your note here..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                className="text-xs"
+              />
+              <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                <span>Only 1024 characters allowed.</span>
+                <span>{noteText.length}/1024</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => setNoteModalOpen(false)}
               >
-                Cancel
+                Close
               </Button>
               <Button
                 type="submit"
+                size="sm"
                 className="bg-[#405189] text-white hover:bg-[#364574]"
               >
                 Save Note
               </Button>
-            </DialogFooter>
+            </div>
+
+            <div className="border-t border-border pt-3">
+              <h6 className="mb-2 flex items-center justify-between text-xs font-semibold">
+                <span>Previous Activities</span>
+                <Badge variant="secondary" className="text-[10px]">
+                  {notePrevNotes.length + notePrevActivities.length}
+                </Badge>
+              </h6>
+
+              <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                {noteActivitiesLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        className="space-y-1.5 rounded border border-border p-2.5"
+                      >
+                        <div className="flex justify-between">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-3 w-28" />
+                        </div>
+                        <Skeleton className="h-3.5 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : notePrevNotes.length === 0 &&
+                  notePrevActivities.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-muted-foreground">
+                    No previous notes or activities recorded yet.
+                  </p>
+                ) : (
+                  <>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {notePrevNotes.map((n: any) => (
+                      <div
+                        key={`note-${n.id}`}
+                        className="rounded border border-amber-200/70 bg-amber-50/40 p-2.5 text-xs dark:border-amber-900/40 dark:bg-amber-950/20"
+                      >
+                        <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span className="font-semibold text-foreground">
+                            <i className="ri-sticky-note-line mr-1 text-amber-600" />
+                            {n.creator_name || "Counsellor"}
+                          </span>
+                          <span>{formatDateTime(n.created_at)}</span>
+                        </div>
+                        <p className="whitespace-pre-wrap text-foreground/90">
+                          {n.note}
+                        </p>
+                      </div>
+                    ))}
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {notePrevActivities.map((act: any) => (
+                      <div
+                        key={`act-${act.id}`}
+                        className="rounded border border-border bg-muted/20 p-2.5 text-xs"
+                      >
+                        <div className="mb-0.5 flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span className="font-semibold text-[#405189]">
+                            <i className="ri-history-line mr-1" />
+                            {act.actor_name || "System"} ·{" "}
+                            <span className="uppercase">{act.action}</span>
+                          </span>
+                          <span>{formatDateTime(act.created_at)}</span>
+                        </div>
+                        <p className="text-muted-foreground">{act.description}</p>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
@@ -2461,7 +2654,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
               Leads will be placed into the initial stage of the target pipeline.
             </DialogDescription>
           </DialogHeader>
-          <select
+          <FormSelect
             value={movePipelineId}
             onChange={(e) => setMovePipelineId(e.target.value)}
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
@@ -2473,7 +2666,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                 {p.name}
               </option>
             ))}
-          </select>
+          </FormSelect>
           <DialogFooter>
             <Button
               type="button"
@@ -2510,7 +2703,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2.5 text-xs">
-            <select
+            <FormSelect
               value={bulkDataForm.institute_id}
               onChange={(e) =>
                 setBulkDataForm({
@@ -2527,8 +2720,8 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                   {i.name}
                 </option>
               ))}
-            </select>
-            <select
+            </FormSelect>
+            <FormSelect
               value={bulkDataForm.programme_id}
               onChange={(e) =>
                 setBulkDataForm({
@@ -2545,8 +2738,8 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                   {p.name}
                 </option>
               ))}
-            </select>
-            <select
+            </FormSelect>
+            <FormSelect
               value={bulkDataForm.course_id}
               onChange={(e) =>
                 setBulkDataForm({
@@ -2563,8 +2756,8 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                   {c.name}
                 </option>
               ))}
-            </select>
-            <select
+            </FormSelect>
+            <FormSelect
               value={bulkDataForm.state_id}
               onChange={(e) =>
                 setBulkDataForm({ ...bulkDataForm, state_id: e.target.value })
@@ -2578,7 +2771,7 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
                   {s.name}
                 </option>
               ))}
-            </select>
+            </FormSelect>
           </div>
           <DialogFooter>
             <Button
@@ -2834,60 +3027,14 @@ export function LeadsManagerClient({ initialMaster, roleSlug, userEmail, userNam
         </DialogContent>
       </Dialog>
 
-      {/* ==================== 15. SHADCN DIALOG: API DOCS & LIVE TESTER ==================== */}
-      <Dialog open={apiDocModalOpen} onOpenChange={setApiDocModalOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-semibold">
-              Lead Capture API Documentation & Live Sandbox
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Push real-time leads into LMS CRM from websites, portals, or webhooks.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 text-xs">
-            <div className="rounded-md bg-slate-900 p-3 font-mono text-[11px] text-emerald-400">
-              <div>POST /api/leads/add</div>
-              <div className="mt-1 text-slate-300">
-                {`{ "name": "Student Name", "mobile": "9810012345", "email": "student@mail.com", "organization_id": 1 }`}
-              </div>
-            </div>
-            <form
-              onSubmit={handleTestPublicApi}
-              className="rounded-md border border-border p-3 space-y-2.5"
-            >
-              <div className="font-semibold text-[#405189]">
-                Quick Test Live Endpoint
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  type="text"
-                  required
-                  value={apiTestName}
-                  onChange={(e) => setApiTestName(e.target.value)}
-                  placeholder="Test Name"
-                  className="h-8 text-xs"
-                />
-                <Input
-                  type="text"
-                  required
-                  value={apiTestMobile}
-                  onChange={(e) => setApiTestMobile(e.target.value)}
-                  placeholder="Test Mobile"
-                  className="h-8 text-xs"
-                />
-              </div>
-              <Button
-                type="submit"
-                size="sm"
-                className="bg-[#0ab39c] text-white hover:bg-[#099885]"
-              >
-                Send Test API Lead
-              </Button>
-            </form>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* ==================== 15. LEAD CREATE API (FULL DOCS & LIVE TESTER) ==================== */}
+      <LeadCreateApiModal
+        open={apiDocModalOpen}
+        onOpenChange={setApiDocModalOpen}
+        onLeadCreated={() => fetchLeads()}
+      />
+
+      {DeleteDialog}
     </Card>
   )
 }

@@ -3,6 +3,8 @@
 import * as React from "react"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { useConfirmDelete } from "@/components/ui/confirm-delete-dialog"
+import { DatePicker } from "@/components/ui/date-time-picker"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,6 +20,7 @@ import {
 } from "@/components/ui/dialog"
 
 export default function MarketingEventsPage() {
+  const { confirmDelete, DeleteDialog } = useConfirmDelete()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [items, setItems] = React.useState<any[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,19 +98,25 @@ export default function MarketingEventsPage() {
               <Button
                 size="xs"
                 variant="destructive"
-                onClick={async () => {
-                  await fetch("/api/crm-resources", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      resource: "marketing_events",
-                      action: "delete",
-                      id: ev.id,
-                    }),
+                onClick={() =>
+                  confirmDelete({
+                    title: "Delete Marketing Event?",
+                    description: `Are you sure you want to delete event "${ev.name}"?`,
+                    onConfirm: async () => {
+                      await fetch("/api/crm-resources", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          resource: "marketing_events",
+                          action: "delete",
+                          id: ev.id,
+                        }),
+                      })
+                      toast.success("Event deleted")
+                      load()
+                    },
                   })
-                  toast.success("Event deleted")
-                  load()
-                }}
+                }
                 className="text-[11px]"
               >
                 Delete
@@ -117,7 +126,7 @@ export default function MarketingEventsPage() {
         },
       },
     ],
-    [load]
+    [load, confirmDelete]
   )
 
   return (
@@ -192,12 +201,10 @@ export default function MarketingEventsPage() {
               }
               className="text-xs"
             />
-            <Input
-              type="date"
-              required
+            <DatePicker
               value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-              className="h-9 text-xs"
+              onChange={(v) => setForm({ ...form, date: v })}
+              placeholder="Pick event date"
             />
             <DialogFooter>
               <Button
@@ -217,6 +224,7 @@ export default function MarketingEventsPage() {
           </form>
         </DialogContent>
       </Dialog>
+      {DeleteDialog}
     </div>
   )
 }

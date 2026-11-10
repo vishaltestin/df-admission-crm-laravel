@@ -4,6 +4,8 @@ import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
+import { FormSelect } from "@/components/ui/form-select"
+import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -24,6 +26,7 @@ export default function EditCouponPage() {
   const router = useRouter()
   const [form, setForm] = React.useState({
     code: "",
+    name: "",
     type: "flat",
     value: "500",
     min_amount: "0",
@@ -46,6 +49,7 @@ export default function EditCouponPage() {
         if (c) {
           setForm({
             code: c.code || "",
+            name: c.name || "",
             type: c.type || "flat",
             value: String(c.value ?? 0),
             min_amount: String(c.min_amount ?? 0),
@@ -80,35 +84,59 @@ export default function EditCouponPage() {
             if (res.ok) {
               toast.success("Coupon updated!")
               router.push("/coupons")
+            } else {
+              toast.error("Failed to update coupon")
             }
           }}
           className="space-y-3.5"
         >
+          <h4 className="border-b border-border pb-2 text-sm font-semibold">
+            Edit Coupon
+          </h4>
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <Label className="mb-1 block text-xs">Coupon Code *</Label>
+              <Label className="mb-1 block text-xs">
+                Coupon Code <span className="text-rose-500">*</span>
+              </Label>
               <Input
                 required
                 value={form.code}
                 onChange={(e) =>
                   setForm({ ...form, code: e.target.value.toUpperCase() })
                 }
-                className="h-9 font-mono uppercase text-xs"
+                className="h-9 font-mono text-xs uppercase"
               />
             </div>
+
+            <div>
+              <Label className="mb-1 block text-xs">
+                Coupon Name (Optional)
+              </Label>
+              <Input
+                placeholder="e.g. Merit Scholarship 2026"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="h-9 text-xs"
+              />
+            </div>
+
             <div>
               <Label className="mb-1 block text-xs">Discount Type</Label>
-              <select
+              <FormSelect
                 value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
-              >
-                <option value="flat">Flat Amount (₹)</option>
-                <option value="percent">Percentage (%)</option>
-              </select>
+                onValueChange={(v) => setForm({ ...form, type: v })}
+                options={[
+                  { value: "flat", label: "Flat Amount (₹)" },
+                  { value: "percent", label: "Percentage (%)" },
+                ]}
+              />
             </div>
+
             <div>
-              <Label className="mb-1 block text-xs">Discount Value *</Label>
+              <Label className="mb-1 block text-xs">
+                Discount Value <span className="text-rose-500">*</span>
+              </Label>
               <Input
                 type="number"
                 required
@@ -117,6 +145,7 @@ export default function EditCouponPage() {
                 className="h-9 text-xs"
               />
             </div>
+
             <div>
               <Label className="mb-1 block text-xs">Min Order Amount (₹)</Label>
               <Input
@@ -128,6 +157,7 @@ export default function EditCouponPage() {
                 className="h-9 text-xs"
               />
             </div>
+
             <div>
               <Label className="mb-1 block text-xs">Max Discount (₹)</Label>
               <Input
@@ -140,19 +170,19 @@ export default function EditCouponPage() {
                 className="h-9 text-xs"
               />
             </div>
+
             <div>
               <Label className="mb-1 block text-xs">Usage Type</Label>
-              <select
+              <FormSelect
                 value={form.usage_type}
-                onChange={(e) =>
-                  setForm({ ...form, usage_type: e.target.value })
-                }
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
-              >
-                <option value="single">Single Use</option>
-                <option value="multiple">Multiple Use</option>
-              </select>
+                onValueChange={(v) => setForm({ ...form, usage_type: v })}
+                options={[
+                  { value: "single", label: "Single Use" },
+                  { value: "multiple", label: "Multiple Use" },
+                ]}
+              />
             </div>
+
             <div>
               <Label className="mb-1 block text-xs">Usage Limit</Label>
               <Input
@@ -165,36 +195,38 @@ export default function EditCouponPage() {
                 className="h-9 text-xs"
               />
             </div>
-            <div>
-              <Label className="mb-1 block text-xs">Status</Label>
-              <select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
-              >
-                <option value="1">Active</option>
-                <option value="0">Inactive</option>
-              </select>
-            </div>
+
             <div>
               <Label className="mb-1 block text-xs">Start Date & Time</Label>
-              <Input
-                type="datetime-local"
+              <DateTimePicker
                 value={form.start_at}
-                onChange={(e) => setForm({ ...form, start_at: e.target.value })}
-                className="h-9 text-xs"
+                onChange={(v) => setForm({ ...form, start_at: v })}
+                placeholder="Pick start date & time"
               />
             </div>
+
             <div>
               <Label className="mb-1 block text-xs">End Date & Time</Label>
-              <Input
-                type="datetime-local"
+              <DateTimePicker
                 value={form.end_at}
-                onChange={(e) => setForm({ ...form, end_at: e.target.value })}
-                className="h-9 text-xs"
+                onChange={(v) => setForm({ ...form, end_at: v })}
+                placeholder="Pick expiry date & time"
+              />
+            </div>
+
+            <div>
+              <Label className="mb-1 block text-xs">Status</Label>
+              <FormSelect
+                value={form.status}
+                onValueChange={(v) => setForm({ ...form, status: v })}
+                options={[
+                  { value: "1", label: "Active" },
+                  { value: "0", label: "Inactive" },
+                ]}
               />
             </div>
           </div>
+
           <div className="flex gap-2 pt-2">
             <Button
               type="submit"

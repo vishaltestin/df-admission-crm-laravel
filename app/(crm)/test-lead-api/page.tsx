@@ -6,6 +6,7 @@ import { BreadcrumbBar } from "@/components/crm/breadcrumb-bar"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default function TestLeadApiPage() {
   const [form, setForm] = React.useState({
@@ -143,7 +144,7 @@ export default function TestLeadApiPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              <select
+              <FormSelect
                 value={form.upload_via}
                 onChange={(e) =>
                   setForm({ ...form, upload_via: e.target.value })
@@ -155,8 +156,8 @@ export default function TestLeadApiPage() {
                 <option value="whatsapp">WhatsApp</option>
                 <option value="google_ads">Google Ads</option>
                 <option value="partner_api">Partner API</option>
-              </select>
-              <select
+              </FormSelect>
+              <FormSelect
                 value={form.source_type}
                 onChange={(e) =>
                   setForm({ ...form, source_type: e.target.value })
@@ -167,7 +168,7 @@ export default function TestLeadApiPage() {
                 <option value="bulk_cron">Bulk Cron</option>
                 <option value="google_ads">Google Ads</option>
                 <option value="partner_api">Partner API</option>
-              </select>
+              </FormSelect>
             </div>
 
             <Button

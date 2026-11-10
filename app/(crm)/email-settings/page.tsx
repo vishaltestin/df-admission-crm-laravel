@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default function EmailSettingsPage() {
   const [form, setForm] = React.useState({
@@ -75,7 +76,7 @@ export default function EmailSettingsPage() {
                 <Label className="mb-1 block text-xs">
                   Provider (Optional)
                 </Label>
-                <select
+                <FormSelect
                   value={form.provider}
                   onChange={(e) =>
                     setForm({ ...form, provider: e.target.value })
@@ -88,11 +89,11 @@ export default function EmailSettingsPage() {
                   <option value="mailgun">Mailgun</option>
                   <option value="postmark">Postmark</option>
                   <option value="gmail">Google Workspace SMTP</option>
-                </select>
+                </FormSelect>
               </div>
               <div>
                 <Label className="mb-1 block text-xs">Mail Driver *</Label>
-                <select
+                <FormSelect
                   value={form.mail_mailer}
                   onChange={(e) =>
                     setForm({ ...form, mail_mailer: e.target.value })
@@ -102,11 +103,11 @@ export default function EmailSettingsPage() {
                   <option value="smtp">SMTP</option>
                   <option value="sendmail">Sendmail</option>
                   <option value="ses">SES</option>
-                </select>
+                </FormSelect>
               </div>
               <div>
                 <Label className="mb-1 block text-xs">Encryption</Label>
-                <select
+                <FormSelect
                   value={form.mail_encryption}
                   onChange={(e) =>
                     setForm({ ...form, mail_encryption: e.target.value })
@@ -116,7 +117,7 @@ export default function EmailSettingsPage() {
                   <option value="tls">TLS (Recommended)</option>
                   <option value="ssl">SSL</option>
                   <option value="">None</option>
-                </select>
+                </FormSelect>
               </div>
 
               <div className="sm:col-span-2">

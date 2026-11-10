@@ -304,6 +304,34 @@ async function main() {
     }
   }
 
+  if ((await prisma.ivr_logs.count()) === 0) {
+    const sampleLeads = await prisma.leads.findMany({
+      take: 3,
+      orderBy: { id: "asc" },
+    })
+    for (let i = 0; i < sampleLeads.length; i++) {
+      const sl = sampleLeads[i]
+      await prisma.ivr_logs.create({
+        data: {
+          organization_id: BigInt(1),
+          lead_id: sl.id,
+          mobile: sl.mobile,
+          dtmf: i === 1 ? null : i === 2 ? "2" : "1",
+          call_id: `IVR-2026-${1001 + i}`,
+          status: i === 1 ? "no-answer" : "completed",
+          provider: "Exotel",
+          response_json:
+            i === 1
+              ? "Ringing timeout (30s)"
+              : i === 2
+                ? "Pressed 2 - Requested Counsellor Callback"
+                : "Pressed 1 - Interested in Admission",
+          created_at: now,
+        },
+      })
+    }
+  }
+
   console.log("Demo data & DF CRM accounts synchronized successfully.")
 }
 

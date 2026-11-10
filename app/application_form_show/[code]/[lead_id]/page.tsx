@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function PublicApplicationFormPage() {
   const params = useParams<{ code: string; lead_id: string }>()
@@ -65,10 +66,26 @@ export default function PublicApplicationFormPage() {
   }, [appliedCoupon, totalBase])
   const payable = Math.max(0, totalBase - discount)
 
-  if (loading) {
+  if (loading && !form) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-600">
-        Loading Admission Application Portal...
+      <div className="min-h-screen bg-slate-50 py-10 px-4">
+        <div className="mx-auto max-w-3xl space-y-4">
+          <Card className="gap-3 border-slate-200 bg-white p-6 shadow-xs">
+            <Skeleton className="h-6 w-64" />
+            <Skeleton className="h-4 w-96" />
+          </Card>
+          <Card className="gap-4 border-slate-200 bg-white p-6 shadow-xs">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-3.5 w-28" />
+                  <Skeleton className="h-9 w-full" />
+                </div>
+              ))}
+            </div>
+            <Skeleton className="h-10 w-full rounded" />
+          </Card>
+        </div>
       </div>
     )
   }

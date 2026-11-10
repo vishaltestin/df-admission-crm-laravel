@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default function SmsSettingsPage() {
   const [form, setForm] = React.useState({
@@ -122,7 +123,7 @@ export default function SmsSettingsPage() {
                 <Label className="mb-1 block text-xs">
                   Provider (Optional)
                 </Label>
-                <select
+                <FormSelect
                   value={form.provider}
                   onChange={(e) =>
                     setForm({ ...form, provider: e.target.value })
@@ -135,12 +136,12 @@ export default function SmsSettingsPage() {
                   <option value="fast2sms">Fast2SMS</option>
                   <option value="gupshup">Gupshup Enterprise</option>
                   <option value="twilio">Twilio SMS</option>
-                </select>
+                </FormSelect>
               </div>
 
               <div>
                 <Label className="mb-1 block text-xs">SMS Route *</Label>
-                <select
+                <FormSelect
                   value={form.route}
                   onChange={(e) => setForm({ ...form, route: e.target.value })}
                   className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
@@ -148,7 +149,7 @@ export default function SmsSettingsPage() {
                   <option value="transactional">Transactional (Route 4)</option>
                   <option value="otp">OTP Priority</option>
                   <option value="promotional">Promotional (Route 1)</option>
-                </select>
+                </FormSelect>
               </div>
 
               <div className="sm:col-span-2">
